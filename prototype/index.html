@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>locus — the most capable AI, on the server you already own</title>
+  <meta name="description" content="locus runs the largest open AI models inside your company, on your existing server and a single graphics card.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__logo" href="#top" aria-label="locus, home"><img src="/locus-wordmark.svg" alt="locus" width="511" height="162"></a>
+    <nav class="nav__links" aria-label="Page">
+      <a href="#how">How it works</a>
+    </nav>
+    <a class="btn btn--sm" href="#check">Check your server</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ── hero: the lotus lights the page ─────────────────────── -->
+  <section class="hero">
+    <canvas class="hero__light" aria-hidden="true"></canvas>
+
+    <div class="hero__stage">
+      <svg class="lotus" viewBox="-190 -226 380 236" role="img" aria-label="locus">
+        <g class="petals" fill="#E9A0B6">
+          <path d="M-142.8 0C-160.6 -17.8 -172.7 -40.5 -177.5 -65.2C-162.8 -72.1 -147 -76 -130.9 -76.9C-123.6 -47.4 -107.8 -20.6 -85.4 0Z"/>
+          <path d="M-62.7 0C-113.6 -36.8 -134 -102.9 -112.5 -162C-95 -159.5 -78.1 -153.8 -62.8 -145.1C-77.9 -96 -70.1 -42.8 -41.7 0Z"/>
+          <path d="M-24 0C-74.6 -66.5 -64 -161.1 0 -214.8C64 -161.1 74.6 -66.5 24 0Z"/>
+          <path d="M62.7 0C113.6 -36.8 134 -102.9 112.5 -162C95 -159.5 78.1 -153.8 62.8 -145.1C77.9 -96 70.1 -42.8 41.7 0Z"/>
+          <path d="M142.8 0C160.6 -17.8 172.7 -40.5 177.5 -65.2C162.8 -72.1 147 -76 130.9 -76.9C123.6 -47.4 107.8 -20.6 85.4 0Z"/>
+        </g>
+        <g class="hots" fill="#F3C8D4"></g>
+        <g class="hits" fill="transparent" stroke="transparent" stroke-width="16"></g>
+      </svg>
+    </div>
+
+    <div class="hero__copy">
+      <h1>The most capable AI, on the server you already own.</h1>
+      <p class="hero__sub">locus runs the largest open AI models inside your company, on your existing server and a single graphics card. Nothing leaves the building.</p>
+      <div class="hero__cta">
+        <a class="btn" href="#check">Check your server</a>
+        <a class="link" href="#how">See how it works</a>
+      </div>
+      <p class="label hero__hint">Move over the petals</p>
+    </div>
+  </section>
+
+  <!-- ── scene: a room of graphics cards becomes one server ──── -->
+  <section class="section" id="how">
+    <div class="wrap">
+      <div class="section__head">
+        <span class="label">How it works</span>
+        <h2>The same model. One server <span class="dim">instead of a room of them.</span></h2>
+        <p class="lead">The best AI models usually need a room of graphics cards. locus keeps most of the model in your server's memory and hands one card the heavy part.</p>
+      </div>
+
+      <div class="panel" data-scene>
+        <div class="panel__stage">
+          <div class="tag tag--racks" data-tag="racks">
+            <span class="label">The usual way</span>
+            <strong>A room of graphics cards</strong>
+            <span class="tag__num">about $400K</span>
+          </div>
+          <div class="panel__view">
+            <span class="chip" data-anchor="ram">Memory</span>
+            <span class="chip" data-anchor="cpu">Processor</span>
+            <span class="chip" data-anchor="gpu">One graphics card</span>
+          </div>
+          <div class="tag tag--server" data-tag="server">
+            <span class="label">With locus</span>
+            <strong>The server you already own</strong>
+            <span class="tag__num">plus one 24 GB graphics card</span>
+          </div>
+          <span class="pill" data-live><span class="led"></span>100% local · active</span>
+        </div>
+        <ol class="steps">
+          <li data-step="1"><span class="steps__n">1</span><p><strong>The usual way.</strong> A room of graphics cards, out of reach for most teams.</p></li>
+          <li data-step="2"><span class="steps__n">2</span><p><strong>locus moves the model in.</strong> Most of it settles in your server's memory.</p></li>
+          <li data-step="3"><span class="steps__n">3</span><p><strong>One card does the heavy part.</strong> Everything runs inside your building.</p></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" id="check">
+    <div class="wrap closing__in">
+      <h2>Find out what your server can already do.</h2>
+      <p class="lead">Send us the make and model. You get a straight answer: yes, no, or what it would take.</p>
+      <a class="btn" href="#check">Check your server</a>
+      <p class="label">Prototype. The button does not send anything yet.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__in">
+    <span>Intelligence, where your data already lives.</span>
+    <span>© 2026 locus</span>
+  </div>
+</footer>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
