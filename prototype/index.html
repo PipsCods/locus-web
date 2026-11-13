@@ -48,7 +48,6 @@
         <a class="btn" href="#check">Check your server</a>
         <a class="link" href="#how">See how it works</a>
       </div>
-      <p class="label hero__hint">Move over the petals</p>
     </div>
   </section>
 
@@ -57,8 +56,8 @@
     <div class="wrap">
       <div class="section__head">
         <span class="label">How it works</span>
-        <h2>The same model. One server <span class="dim">instead of a room of them.</span></h2>
-        <p class="lead">The best AI models usually need a room of graphics cards. locus keeps most of the model in your server's memory and hands one card the heavy part.</p>
+        <h2>One server does the work <span class="dim">of a room of graphics cards.</span></h2>
+        <p class="lead">A top AI model is made of many small specialists, and each word needs only a few of them. So locus keeps them in your server's memory and shares the work between your processor and one graphics card.</p>
       </div>
 
       <div class="panel" data-scene>
@@ -66,24 +65,26 @@
           <div class="tag tag--racks" data-tag="racks">
             <span class="label">The usual way</span>
             <strong>A room of graphics cards</strong>
-            <span class="tag__num">about $400K</span>
           </div>
           <div class="panel__view">
             <span class="chip" data-anchor="ram">Memory</span>
             <span class="chip" data-anchor="cpu">Processor</span>
-            <span class="chip" data-anchor="gpu">One graphics card</span>
+            <span class="chip" data-anchor="gpu">Graphics card</span>
           </div>
           <div class="tag tag--server" data-tag="server">
             <span class="label">With locus</span>
             <strong>The server you already own</strong>
-            <span class="tag__num">plus one 24 GB graphics card</span>
+            <span class="tag__num">plus one graphics card</span>
           </div>
-          <span class="pill" data-live><span class="led"></span>100% local · active</span>
+        </div>
+        <div class="readout">
+          <p class="readout__now"><span class="label">Now</span><span data-narrate></span></p>
+          <p class="readout__answer"><span class="label">Answer</span><span><span data-answer></span><span class="caret"></span></span></p>
         </div>
         <ol class="steps">
-          <li data-step="1"><span class="steps__n">1</span><p><strong>The usual way.</strong> A room of graphics cards, out of reach for most teams.</p></li>
-          <li data-step="2"><span class="steps__n">2</span><p><strong>locus moves the model in.</strong> Most of it settles in your server's memory.</p></li>
-          <li data-step="3"><span class="steps__n">3</span><p><strong>One card does the heavy part.</strong> Everything runs inside your building.</p></li>
+          <li data-step="1"><span class="steps__n">1</span><p><strong>The usual way.</strong> The whole model sits on a room of graphics cards.</p></li>
+          <li data-step="2"><span class="steps__n">2</span><p><strong>locus splits it.</strong> The specialists move into your server's memory. A small part goes on one card.</p></li>
+          <li data-step="3"><span class="steps__n">3</span><p><strong>Every word is shared work.</strong> The card reads the request. Your processor runs the few specialists needed, straight from memory.</p></li>
         </ol>
       </div>
     </div>
