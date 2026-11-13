@@ -14,6 +14,7 @@
 
 import * as THREE from "three";
 import { Reflector } from "three/addons/objects/Reflector.js";
+import { WATER_FRAG, waterUniforms } from "./art.js";
 
 const QUAD_VERT = "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }";
 const SIM_FRAG = /* glsl */ `
@@ -102,6 +103,7 @@ export function createWater(renderer, opts = {}) {
       uE: { value: 1 / res },                 // one cell of the ripple grid
       uSlope: { value: 5 },                   // keeps ripples looking the same on a coarser grid
       uBlend: { value: 0 },                   // how far we are between two simulation steps
+      ...(opts.art ? waterUniforms(opts.art, opts.sky ?? 0x050706) : {}),
     },
     vertexShader: /* glsl */ `
       uniform mat4 textureMatrix;
@@ -158,6 +160,7 @@ export function createWater(renderer, opts = {}) {
         gl_FragColor = vec4(col, alpha);
       }`,
   };
+  if (opts.art) shader.fragmentShader = WATER_FRAG(SIM, CX, CZ); // the illustrated style draws the water instead
   // The mirror image is seen through ripples and dimmed, so it can be much smaller than the picture
   // (see setMirrorSize); its edges stay smoothed, or calm water would show them as little steps.
   const mesh = new Reflector(new THREE.PlaneGeometry(opts.plane ?? 90, opts.plane ?? 90), { textureWidth: 512, textureHeight: 512, multisample: 4, color: opts.color ?? 0x03100d, clipBias: 0.003, shader });

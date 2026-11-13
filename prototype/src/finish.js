@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 import { OutputShader } from "three/addons/shaders/OutputShader.js";
+import { PAINT_FRAG, paintUniforms } from "./art.js";
 
 // The stock glow, minus its last step (laying the glow back over the picture): the final pass does that.
 class Glow extends UnrealBloomPass {
@@ -68,8 +69,12 @@ class Glow extends UnrealBloomPass {
   }
 }
 
-export function createFinish(renderer, { samples = 4 } = {}) {
-  const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples });
+export function createFinish(renderer, { samples = 4, art = null } = {}) {
+  // The illustrated style draws its own contours from the scene's depth, so it keeps that as a texture
+  // (and needs no edge smoothing: every edge ends up under a drawn line).
+  const target = new THREE.WebGLRenderTarget(4, 4, art
+    ? { type: THREE.HalfFloatType, samples: 0, depthTexture: new THREE.DepthTexture(4, 4) }
+    : { type: THREE.HalfFloatType, samples });
   const glow = new Glow(new THREE.Vector2(256, 256), 0.22, 0.7, 0.9);
   const material = new THREE.RawShaderMaterial({
     name: "LocusFinish",
@@ -91,18 +96,46 @@ export function createFinish(renderer, { samples = 4 } = {}) {
     depthTest: false,
     depthWrite: false,
   });
-  const quad = new FullScreenQuad(material);
+  const paint = art && new THREE.RawShaderMaterial({
+    name: "LocusPaint",
+    defines: { ACES_FILMIC_TONE_MAPPING: "", SRGB_TRANSFER: "" },
+    uniforms: {
+      tDiffuse: { value: null }, tDepth: { value: null }, toneMappingExposure: { value: 1 },
+      uPx: { value: new THREE.Vector2() }, uRes: { value: new THREE.Vector2() }, uNear: { value: 0.5 }, uFar: { value: 260 },
+      ...paintUniforms(art),
+    },
+    vertexShader: OutputShader.vertexShader,
+    fragmentShader: PAINT_FRAG,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const quad = new FullScreenQuad(paint || material);
+  const css = new THREE.Vector2();
   let glowAmount = 1;
 
   return {
     target,
     glow,
     setSize(w, h) { target.setSize(w, h); glow.setSize(w, h); },
-    setSamples(n) { if (target.samples !== n) { target.samples = n; target.dispose(); } }, // rebuilt on the next picture
+    paint,
+    setSamples(n) { if (!art && target.samples !== n) { target.samples = n; target.dispose(); } }, // rebuilt on the next picture
     setGlow(amount) { glowAmount = amount; }, // 0..1; at 0 the glow is not worked out at all
     render(scene, camera) {
       renderer.setRenderTarget(target);
       renderer.render(scene, camera);
+      if (paint) {
+        const u = paint.uniforms;
+        u.tDiffuse.value = target.texture;
+        u.tDepth.value = target.depthTexture;
+        u.toneMappingExposure.value = renderer.toneMappingExposure;
+        u.uPx.value.set(1 / target.width, 1 / target.height);
+        u.uLine.value = art.lineWeight * Math.min(1.15, Math.max(0.72, target.width / 1700)); // a finer pen on a small screen
+        u.uRes.value.copy(renderer.getSize(css));
+        u.uNear.value = camera.near; u.uFar.value = camera.far;
+        renderer.setRenderTarget(null);
+        quad.render(renderer);
+        return;
+      }
       const glowOn = glowAmount > 0;
       if (glowOn) glow.render(renderer, null, target);
       const u = material.uniforms;

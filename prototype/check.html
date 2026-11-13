@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Check your server — locus</title>
+  <meta name="description" content="Pick the server you own and one graphics card. See the best AI model it could run, how fast, for how many people, and what the usual way would cost.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/src/style.css">
+  <link rel="stylesheet" href="/src/check.css">
+</head>
+<body class="check-page">
+
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__logo" href="/" aria-label="locus, home"><img src="/locus-wordmark.svg" alt="locus" width="511" height="162"></a>
+    <nav class="nav__links" aria-label="Page">
+      <a href="/#how">How it works</a>
+    </nav>
+  </div>
+</header>
+
+<main class="check" id="top">
+  <div class="wrap">
+
+    <header class="check__head">
+      <p class="label">Check your server</p>
+      <h1>See what your server could run.</h1>
+      <p class="lead">Pick the server closest to yours and the graphics card you would add. You get the best model it can hold, how fast it answers, how many people it serves at once, and what the usual way would cost.</p>
+    </header>
+
+    <form class="check__form" id="check-form" novalidate>
+
+      <fieldset class="step">
+        <legend><span class="steps__n">1</span>Your work email</legend>
+        <p class="step__hint">The estimate appears on this page. We use your email only to follow up on it.</p>
+        <div class="field">
+          <label class="sr" for="email">Work email</label>
+          <input type="email" id="email" name="email" autocomplete="email" inputmode="email" placeholder="name@company.com" required aria-describedby="email-error">
+          <p class="field__error" id="email-error" role="alert" hidden></p>
+        </div>
+        <!-- people never see this field; scripts that fill in everything give themselves away -->
+        <input class="hp" type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      </fieldset>
+
+      <fieldset class="step">
+        <legend><span class="steps__n">2</span>The server you own</legend>
+        <p class="step__hint">Choose its generation, then the set-up closest to yours. Not sure? The model name on the front of the server tells you the generation.</p>
+        <div class="gens" role="radiogroup" aria-label="Server generation" data-gens></div>
+        <div class="configs" role="radiogroup" aria-label="Processors and memory" data-configs></div>
+      </fieldset>
+
+      <fieldset class="step">
+        <legend><span class="steps__n">3</span>The graphics card to add</legend>
+        <p class="step__hint">One card. More memory on it means more of the model sits on the card, and a faster answer.</p>
+        <div class="cards" role="radiogroup" aria-label="Graphics card" data-cards></div>
+      </fieldset>
+
+      <div class="check__go">
+        <button class="btn" type="submit" data-go>Show my estimate</button>
+        <p class="check__status" role="status" data-status></p>
+      </div>
+    </form>
+
+    <section class="result" id="result" aria-live="polite" tabindex="-1" hidden></section>
+
+    <noscript><p class="lead">This page needs JavaScript to work out the estimate.</p></noscript>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__in">
+    <span>Intelligence, where your data already lives.</span>
+    <span>© 2026 locus</span>
+  </div>
+</footer>
+
+<script type="module" src="/src/check.js"></script>
+</body>
+</html>

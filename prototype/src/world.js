@@ -14,6 +14,7 @@ import { createWater } from "./water.js";
 import { createFlower, padGeometry, padTexture } from "./lotus.js";
 import { createStory } from "./story.js";
 import { createFinish } from "./finish.js";
+import { artStyle, paintify, addCutouts, swim } from "./art.js";
 
 const PAGE = 0x050706;
 const STAGE = new THREE.Vector3(30, 0, -4); // where the "how it works" story stands, across the water from the lotus
@@ -70,13 +71,18 @@ export function initWorld({ host, how, dom }) {
   canvas.style.cssText = "display:block;width:100%;height:100%;opacity:0";
   host.appendChild(canvas);
 
+  const art = artStyle(); // ?art=ink: the pond as an illustration (see art.js)
+  const ground = art ? art.ground : PAGE;
+  if (art) document.body.classList.add("art", `art-${art.name}`);
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(PAGE);
-  scene.fog = new THREE.FogExp2(PAGE, 0.03);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  pmrem.dispose();
-  scene.environmentIntensity = 0.36;
+  scene.background = new THREE.Color(ground);
+  scene.fog = new THREE.FogExp2(ground, 0.03);
+  if (!art) { // painted surfaces are matt: they mirror no surroundings
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+    scene.environmentIntensity = 0.36;
+  }
   const camera = new THREE.PerspectiveCamera(28, 2, 0.5, 260);
 
   scene.add(new THREE.HemisphereLight(0xdcefe8, 0x030504, 0.5));
@@ -90,25 +96,32 @@ export function initWorld({ host, how, dom }) {
   const rim = new THREE.DirectionalLight(0xf3b6cb, 1.5); // low pink back light: the petals' glowing edges
   scene.add(rim, rim.target);
 
-  const finish = createFinish(renderer);
+  const finish = createFinish(renderer, { art });
   const bloom = finish.glow;
 
   // ── things on the water ──
-  const water = createWater(renderer, { size: 72, res: 1024, center: [16, -4], rate: 60, dropRadius: 0.17, plane: 180 });
+  const water = createWater(renderer, { size: 72, res: 1024, center: [16, -4], rate: 60, dropRadius: 0.17, plane: 180, art, sky: ground, light: art?.light });
   scene.add(water.mesh);
 
   const flower = createFlower();
   scene.add(flower);
 
   // Floating leaves, as three fixed clusters (round the lotus, along the way, round the story): one mesh each.
-  const padMat = new THREE.MeshStandardMaterial({ map: padTexture(), roughness: 0.78, metalness: 0, envMapIntensity: 0.3, side: THREE.DoubleSide });
+  const padMat = new THREE.MeshStandardMaterial({ name: "pad", map: padTexture(), roughness: 0.78, metalness: 0, envMapIntensity: 0.3, side: THREE.DoubleSide });
   const m4 = new THREE.Matrix4();
   const padCluster = (list) => scene.add(new THREE.Mesh(mergeGeometries(list.map(([x, z, r, turn]) => padGeometry(r).applyMatrix4(m4.makeRotationY(turn).setPosition(x, 0.022, z)))), padMat));
   padCluster([[-2.7, -1.0, 1.55, 0.5], [2.6, -1.8, 1.35, 2.3], [-0.5, -3.4, 1.7, 4.1], [4.3, 0.5, 1.15, 3.3], [-4.6, 0.9, 1.25, 5.6], [1.9, 1.7, 0.62, 1.2]]);
   padCluster([[8.5, 2.6, 1.2, 0.9], [11.5, -4.2, 1.6, 2.7], [15.5, 1.6, 0.9, 4.4], [18.0, -6.4, 1.3, 1.8], [21.5, 4.4, 1.5, 3.6], [6.2, -6.0, 1.0, 5.1]]); // they slide past as the view crosses the water
   padCluster([[-5.2, -3.4, 1.5], [5.6, -4.4, 1.15], [-5.6, 6.4, 0.9], [6.1, 7.2, 1.7], [0.2, 9.4, 1.25]].map(([x, z, r], i) => [STAGE.x + x, STAGE.z + z, r, i * 1.3 + 0.4]));
 
-  const story = createStory(scene, water, dom);
+  const story = createStory(scene, water, dom, { wake: art ? art.wake : 1 });
+  let cutouts = null;
+  if (art) {
+    paintify(scene, art);
+    cutouts = addCutouts(scene);
+    camera.layers.enable(1);                                    // the cut-outs live on layer 1:
+    water.mesh.getReflectionCamera(camera).layers.disable(1);   // the page sees them, the water's mirror does not
+  }
 
   // ── quality ──
   const start = startLevel();
@@ -159,6 +172,39 @@ export function initWorld({ host, how, dom }) {
     return clamp((from - top) / (from - to));
   }
 
+  // ── one move between the lotus and the story ──
+  // The stylesheet already stops the page from resting between the two (scroll snapping). This makes
+  // the direction decide: any scroll down from the lotus goes to the story, and a fresh scroll up from
+  // the top of the story goes back, as one continuous move.
+  const storyTop = () => how.offsetTop - navH; // the scroll position at which the story is in place
+  let flightEnd = 0, lastWheel = 0, swallow = false;
+  function fly(to) {
+    flightEnd = performance.now() + 900;
+    swallow = true; // the rest of this gesture (a trackpad keeps sending for a second) must not scroll on
+    window.scrollTo({ top: to, behavior: reduce ? "auto" : "smooth" });
+  }
+  window.addEventListener("wheel", (e) => {
+    if (e.ctrlKey) return; // pinch-zoom
+    const now = performance.now(), fresh = now - lastWheel > 160, y = window.scrollY, top = storyTop();
+    lastWheel = now;
+    if (now < flightEnd) { e.preventDefault(); return; }
+    if (swallow) { if (!fresh) { e.preventDefault(); return; } swallow = false; }
+    const dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? window.innerHeight : 1); // in pixels
+    if (dy > 0 && y < top - 1) { e.preventDefault(); fly(top); }
+    else if (dy < 0 && y > 1 && y <= top + 1) { e.preventDefault(); if (fresh) fly(0); }            // at the story's top: only a new gesture leaves it
+    else if (dy < 0 && y > top + 1 && y + dy < top) { e.preventDefault(); window.scrollTo({ top, behavior: "instant" }); } // scrolling up through the story stops at its top
+  }, { passive: false });
+  window.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
+    const space = e.key === " " && !e.target.closest?.("a, button");
+    const down = e.key === "ArrowDown" || e.key === "PageDown" || (space && !e.shiftKey);
+    const up = e.key === "ArrowUp" || e.key === "PageUp" || (space && e.shiftKey);
+    const y = window.scrollY, top = storyTop();
+    if (down && y < top - 1) { e.preventDefault(); fly(top); }
+    else if (up && y > 1 && y <= top + 1) { e.preventDefault(); fly(0); }
+  });
+
   // ── cursor → ripples, anywhere on the page ──
   const ray = new THREE.Raycaster(), plane = new THREE.Plane(V(0, 1, 0), 0), hit = V(0, 0, 0), ptr = new THREE.Vector2();
   const lastDrop = { x: 999, z: 999, t: 0 };
@@ -188,17 +234,25 @@ export function initWorld({ host, how, dom }) {
   const heroRig = { fov: 28, az: 0, el: Math.atan(0.332), dist: 11, target: V(0, -0.9, 0) };
   const storyRig = { fov: 26, az: 0.1, el: 0.4, dist: 35, target: V(0, 0, 0) };
   const target = V(0, 0, 0), focus = V(0, 0, 0);
-  let clock = 0, st = reduce ? story.settled : 0, nextShed = 0.5, p = 0, t0 = 0, fade = 0;
+  let clock = 0, st = reduce ? story.settled : 0, nextShed = 0.5, p = 0, glide = null, glideAt = 0, t0 = 0, fade = 0;
 
   function render(dt, now, top = how.getBoundingClientRect().top, quiet = false) {
     clock += calm() ? 0 : dt;
     const t = clock;
-    p = travel(top);
+    // The page jumps between its two resting places quickly; the view takes its time and glides after it.
+    if (forced !== null) p = forced;
+    else {
+      const want = travel(top), since = Math.min(0.5, Math.max(dt, (now - glideAt) / 1000)); // real time passed, so the glide takes the same time at any frame rate
+      glideAt = now;
+      glide = glide === null || calm() || Math.abs(want - glide) < 0.0005 ? want : glide + (want - glide) * (1 - Math.exp(-since / 0.3));
+      p = glide;
+    }
     const pe = smooth(p);
 
     // the lotus floats: a slow breath and a sway of a few degrees
     flower.position.y = 0.03 + Math.sin(t * 1.05) * 0.018 + Math.sin(t * 0.63 + 1.3) * 0.008;
     flower.rotation.set(Math.sin(t * 0.8) * 0.012, Math.PI / 8 + Math.sin(t * 0.13) * 0.12, Math.sin(t * 0.57 + 2) * 0.012);
+    if (art) { cutouts.update(t); swim(t, water.mesh.material.uniforms); }
     if (!calm() && pe < 0.7 && t > nextShed) { for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; water.drop(Math.cos(a) * 0.8, Math.sin(a) * 0.8, 0.016); } nextShed = t + 2.8; }
 
     // the story plays once the view has arrived, and rewinds when the visitor goes back up
@@ -225,16 +279,17 @@ export function initWorld({ host, how, dom }) {
     // light and atmosphere follow the view
     focus.set(target.x, 0, target.z);
     key.target.position.copy(focus); key.position.set(focus.x - 8, 18, focus.z + 12);
-    key.intensity = mix(2.0, 2.3, pe);
+    key.intensity = mix(2.0, 2.3, pe) * (art ? art.key : 1);
     renderer.shadowMap.needsUpdate = key.castShadow && pe > 0.02; // only the story's things cast or catch shadows
     rim.target.position.copy(focus); rim.position.set(focus.x + 2, 4.5, focus.z - 9);
     rim.intensity = mix(1.5, 0.3, pe);
-    scene.fog.density = mix((0.045 * 8.4) / heroDist, 0.018, pe);
+    scene.fog.density = mix((0.045 * 8.4) / heroDist, 0.018, pe) * (art?.haze ?? 1);
     bloom.strength = mix(0.22, 0.42, pe); bloom.threshold = mix(0.9, 0.96, pe);
-    finish.setGlow(q.glow ? smooth((pe - 0.08) / 0.12) : 0); // nothing by the lotus is bright enough to glow, so the glow only switches on as the view leaves it
+    finish.setGlow(q.glow && !art ? smooth((pe - 0.08) / 0.12) : 0); // nothing by the lotus is bright enough to glow, so the glow only switches on as the view leaves it
     const wu = water.mesh.material.uniforms;
     wu.uCentre.value.set(target.x, target.z);
     wu.uFade.value.set(mix(6, 13, pe), mix(15, 28, pe));
+    if (art?.pond) { const far = mix(15 * art.pond.hero, 28 * art.pond.story, pe); wu.uFade.value.set(far * art.pond.edge, far); } // on paper: a smaller wash with a crisper edge
     wu.uMirror.value = q.every > 0 ? mix(1, 0.5, pe) : 0;
     wu.uGlow.value = mix(1, 0.45, pe);
 
@@ -340,6 +395,6 @@ export function initWorld({ host, how, dom }) {
     play: (sec, step = 1 / 60) => { for (let s = 0; s < sec; s += step) render(step, performance.now()); return st; }, // run forward right now (tests)
     bench: (n = 30) => { const px = new Uint8Array(4), a = performance.now(); for (let i = 0; i < n; i++) { render(1 / 60, performance.now()); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); } return (performance.now() - a) / n; },
     loop: story.loop,
-    debug: { renderer, finish, scene, camera, water, key, bloom, story, watch },
+    debug: { renderer, finish, scene, camera, water, key, rim, bloom, story, watch, art },
   };
 }

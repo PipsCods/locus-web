@@ -1,0 +1,16 @@
+{
+  // Cloudflare Pages set-up for the site: the built pages in dist/, plus functions/ (the email endpoint).
+  //
+  // First deploy, from this folder:
+  //   npm install
+  //   npx wrangler login
+  //   npx wrangler d1 create locus-leads --binding DB --update-config
+  //       (creates the database that keeps the emails, and writes it into this file by itself)
+  //   npm run deploy
+  //
+  // Later deploys:   npm run deploy
+  // Read the emails: npm run leads
+  "name": "locus-site",
+  "compatibility_date": "2026-11-01",
+  "pages_build_output_dir": "dist"
+}

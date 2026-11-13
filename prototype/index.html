@@ -20,7 +20,7 @@
     <nav class="nav__links" aria-label="Page">
       <a href="#how">How it works</a>
     </nav>
-    <a class="btn btn--sm" href="#check">Check your server</a>
+    <a class="btn btn--sm" href="/check">Check your server</a>
   </div>
 </header>
 
@@ -44,29 +44,29 @@
       <h1>The most capable AI, on the server you already own.</h1>
       <p class="hero__sub">locus runs the largest open AI models inside your company, on your existing server and a single graphics card. Nothing leaves the building.</p>
       <div class="hero__cta">
-        <a class="btn" href="#check">Check your server</a>
+        <a class="btn" href="/check">Check your server</a>
         <a class="link" href="#how">See how it works</a>
       </div>
     </div>
   </section>
 
-  <!-- ── scene: a room of graphics cards becomes one server ──── -->
+  <!-- ── scene: a GPU rack becomes one server ──── -->
 <section class="how" id="how">
     <div class="how__pin">
       <div class="wrap">
         <div class="how__text">
           <span class="label">How it works</span>
-          <h2>One server does the work <span class="dim">of a room of graphics cards.</span></h2>
-          <p class="lead">A top AI model is made of many small specialists, and each word needs only a few of them. So locus keeps them in your server's memory and shares the work between your processor and one graphics card.</p>
+          <h2>One server does the work <span class="dim">of a GPU rack.</span></h2>
+          <p class="lead">A top AI model is made of many small specialists, and each word needs only a few of them. So locus keeps them in your server's RAM and shares the work between your CPU and one graphics card.</p>
           <div class="how__card">
             <div class="readout">
               <p class="readout__now"><span class="label">Now</span><span data-narrate></span></p>
               <p class="readout__answer"><span class="label">Answer</span><span><span data-answer></span><span class="caret"></span></span></p>
             </div>
             <ol class="steps">
-              <li data-step="1"><span class="steps__n">1</span><p><strong>The usual way.</strong> The whole model sits on a room of graphics cards.</p></li>
-              <li data-step="2"><span class="steps__n">2</span><p><strong>locus splits it.</strong> The specialists move into your server's memory. A small part goes on one card.</p></li>
-              <li data-step="3"><span class="steps__n">3</span><p><strong>Every word is shared work.</strong> The card reads the request. Your processor runs the few specialists needed, straight from memory.</p></li>
+              <li data-step="1"><span class="steps__n">1</span><p><strong>The usual way.</strong> The whole model sits on a GPU rack.</p></li>
+              <li data-step="2"><span class="steps__n">2</span><p><strong>locus splits it.</strong> The specialists move into your server's RAM. A small part goes on one card.</p></li>
+              <li data-step="3"><span class="steps__n">3</span><p><strong>Every word is shared work.</strong> The card reads the request. Your CPU runs the few specialists needed, straight from RAM.</p></li>
             </ol>
           </div>
         </div>
@@ -77,9 +77,8 @@
   <section class="closing" id="check">
     <div class="wrap closing__in">
       <h2>Find out what your server can already do.</h2>
-      <p class="lead">Send us the make and model. You get a straight answer: yes, no, or what it would take.</p>
-      <a class="btn" href="#check">Check your server</a>
-      <p class="label">Prototype. The button does not send anything yet.</p>
+      <p class="lead">Pick the server you own and one graphics card. You get a straight estimate: which model it could run, how fast, and for how many people.</p>
+      <a class="btn" href="/check">Check your server</a>
     </div>
   </section>
 
@@ -87,10 +86,10 @@
 
 <!-- labels that sit on things in the pond; positioned by world.js -->
 <div class="pond-labels" aria-hidden="true">
-  <span class="chip chip--tag" data-anchor="racks"><b>The usual way</b>A room of graphics cards</span>
+  <span class="chip chip--tag" data-anchor="racks"><b>The usual way</b>A GPU rack</span>
   <span class="chip chip--tag chip--locus" data-anchor="server"><b>With locus</b>The server you already own</span>
-  <span class="chip" data-anchor="ram">Memory</span>
-  <span class="chip" data-anchor="cpu">Processor</span>
+  <span class="chip" data-anchor="ram">RAM</span>
+  <span class="chip" data-anchor="cpu">CPU</span>
   <span class="chip" data-anchor="gpu">Graphics card</span>
 </div>
 

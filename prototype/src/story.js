@@ -55,7 +55,7 @@ const boardTexture = () => canvasTexture(1024, 720, (g, w, h) => {
   for (let i = 0; i < 160; i++) g.fillRect(rand(i + 500) * w, rand(i + 900) * h, 4, 4);
 });
 
-export function createStory(scene, water, dom) {
+export function createStory(scene, water, dom, { wake = 1 } = {}) {
   // ── materials ──
   const std = (color, metalness, roughness, extra = {}) => new THREE.MeshStandardMaterial({ color, metalness, roughness, ...extra });
   const glow = () => new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -302,7 +302,7 @@ export function createStory(scene, water, dom) {
         pk.rotation.set(0, 0, 0); pk.updateMatrix();
         motes.setMatrixAt(i * TRAIL + k, pk.matrix);
         if (on && k === 0 && dt > 0 && pk.position.y < 0.14 && Math.hypot(pk.position.x - j.last.x, pk.position.z - j.last.z) > 0.24) {
-          water.drop(pk.position.x, pk.position.z, -0.014); // its wake
+          water.drop(pk.position.x, pk.position.z, -0.014 * wake); // its wake
           j.last.copy(pk.position);
         }
       }
@@ -397,11 +397,11 @@ export function createStory(scene, water, dom) {
     if (step !== stepShown) { stepShown = step; for (const el of dom.steps) el.classList.toggle("is-active", Number(el.dataset.step) === step); }
     const { decoding, u, wi } = state;
     let now;
-    if (time < T_MOVE) now = "The usual way: the whole model sits on a room of graphics cards.";
-    else if (time < T_WORDS) now = "locus moves it over: the specialists settle into your server's memory, a small part onto one card.";
+    if (time < T_MOVE) now = "The usual way: the whole model sits on a GPU rack.";
+    else if (time < T_WORDS) now = "locus moves it over: the specialists settle into your server's RAM, a small part onto one card.";
     else if (!decoding) now = "Done. Nothing left the building.";
     else if (u < 0.3) now = "Graphics card: reads the request and picks the few specialists this word needs.";
-    else if (u < 0.84) now = "Processor: runs those specialists straight from memory.";
+    else if (u < 0.84) now = "CPU: runs those specialists straight from RAM.";
     else now = "Graphics card: puts the result together. One more word.";
     setText(dom.narrate, now);
     const shown = decoding ? wi + (u >= 0.9 ? 1 : 0) : time >= T_DONE ? WORDS.length : 0;

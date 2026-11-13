@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cf:dev": "vite build && wrangler pages dev",
+    "deploy": "vite build && wrangler pages deploy",
+    "leads": "wrangler d1 execute locus-leads --remote --command \"SELECT id, created_at, email, server, card, model, country FROM leads ORDER BY id DESC LIMIT 100\""
   },
   "dependencies": {
     "three": "^0.187.0"
   },
   "devDependencies": {
-    "vite": "^8.3.8"
+    "vite": "^8.3.8",
+    "wrangler": "^4.162.0"
   }
 }
