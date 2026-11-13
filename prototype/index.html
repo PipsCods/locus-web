@@ -11,6 +11,9 @@
 </head>
 <body>
 
+<!-- one pond behind the whole page: the lotus up top, the racks and the server further across the water -->
+<div class="pond" aria-hidden="true"></div>
+
 <header class="nav">
   <div class="wrap nav__in">
     <a class="nav__logo" href="#top" aria-label="locus, home"><img src="/locus-wordmark.svg" alt="locus" width="511" height="162"></a>
@@ -23,10 +26,8 @@
 
 <main id="top">
 
-  <!-- ── hero: the lotus lights the page ─────────────────────── -->
+  <!-- ── hero: a 3D lotus floating on rippling water (the flat logo below is the fallback without WebGL) ── -->
   <section class="hero">
-    <canvas class="hero__light" aria-hidden="true"></canvas>
-
     <div class="hero__stage">
       <svg class="lotus" viewBox="-190 -226 380 236" role="img" aria-label="locus">
         <g class="petals" fill="#E9A0B6">
@@ -36,8 +37,6 @@
           <path d="M62.7 0C113.6 -36.8 134 -102.9 112.5 -162C95 -159.5 78.1 -153.8 62.8 -145.1C77.9 -96 70.1 -42.8 41.7 0Z"/>
           <path d="M142.8 0C160.6 -17.8 172.7 -40.5 177.5 -65.2C162.8 -72.1 147 -76 130.9 -76.9C123.6 -47.4 107.8 -20.6 85.4 0Z"/>
         </g>
-        <g class="hots" fill="#F3C8D4"></g>
-        <g class="hits" fill="transparent" stroke="transparent" stroke-width="16"></g>
       </svg>
     </div>
 
@@ -52,40 +51,25 @@
   </section>
 
   <!-- ── scene: a room of graphics cards becomes one server ──── -->
-  <section class="section" id="how">
-    <div class="wrap">
-      <div class="section__head">
-        <span class="label">How it works</span>
-        <h2>One server does the work <span class="dim">of a room of graphics cards.</span></h2>
-        <p class="lead">A top AI model is made of many small specialists, and each word needs only a few of them. So locus keeps them in your server's memory and shares the work between your processor and one graphics card.</p>
-      </div>
-
-      <div class="panel" data-scene>
-        <div class="panel__stage">
-          <div class="tag tag--racks" data-tag="racks">
-            <span class="label">The usual way</span>
-            <strong>A room of graphics cards</strong>
-          </div>
-          <div class="panel__view">
-            <span class="chip" data-anchor="ram">Memory</span>
-            <span class="chip" data-anchor="cpu">Processor</span>
-            <span class="chip" data-anchor="gpu">Graphics card</span>
-          </div>
-          <div class="tag tag--server" data-tag="server">
-            <span class="label">With locus</span>
-            <strong>The server you already own</strong>
-            <span class="tag__num">plus one graphics card</span>
+<section class="how" id="how">
+    <div class="how__pin">
+      <div class="wrap">
+        <div class="how__text">
+          <span class="label">How it works</span>
+          <h2>One server does the work <span class="dim">of a room of graphics cards.</span></h2>
+          <p class="lead">A top AI model is made of many small specialists, and each word needs only a few of them. So locus keeps them in your server's memory and shares the work between your processor and one graphics card.</p>
+          <div class="how__card">
+            <div class="readout">
+              <p class="readout__now"><span class="label">Now</span><span data-narrate></span></p>
+              <p class="readout__answer"><span class="label">Answer</span><span><span data-answer></span><span class="caret"></span></span></p>
+            </div>
+            <ol class="steps">
+              <li data-step="1"><span class="steps__n">1</span><p><strong>The usual way.</strong> The whole model sits on a room of graphics cards.</p></li>
+              <li data-step="2"><span class="steps__n">2</span><p><strong>locus splits it.</strong> The specialists move into your server's memory. A small part goes on one card.</p></li>
+              <li data-step="3"><span class="steps__n">3</span><p><strong>Every word is shared work.</strong> The card reads the request. Your processor runs the few specialists needed, straight from memory.</p></li>
+            </ol>
           </div>
         </div>
-        <div class="readout">
-          <p class="readout__now"><span class="label">Now</span><span data-narrate></span></p>
-          <p class="readout__answer"><span class="label">Answer</span><span><span data-answer></span><span class="caret"></span></span></p>
-        </div>
-        <ol class="steps">
-          <li data-step="1"><span class="steps__n">1</span><p><strong>The usual way.</strong> The whole model sits on a room of graphics cards.</p></li>
-          <li data-step="2"><span class="steps__n">2</span><p><strong>locus splits it.</strong> The specialists move into your server's memory. A small part goes on one card.</p></li>
-          <li data-step="3"><span class="steps__n">3</span><p><strong>Every word is shared work.</strong> The card reads the request. Your processor runs the few specialists needed, straight from memory.</p></li>
-        </ol>
       </div>
     </div>
   </section>
@@ -100,6 +84,15 @@
   </section>
 
 </main>
+
+<!-- labels that sit on things in the pond; positioned by world.js -->
+<div class="pond-labels" aria-hidden="true">
+  <span class="chip chip--tag" data-anchor="racks"><b>The usual way</b>A room of graphics cards</span>
+  <span class="chip chip--tag chip--locus" data-anchor="server"><b>With locus</b>The server you already own</span>
+  <span class="chip" data-anchor="ram">Memory</span>
+  <span class="chip" data-anchor="cpu">Processor</span>
+  <span class="chip" data-anchor="gpu">Graphics card</span>
+</div>
 
 <footer class="footer">
   <div class="wrap footer__in">
