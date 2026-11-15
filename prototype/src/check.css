@@ -28,8 +28,10 @@
 }
 .field input::placeholder { color: var(--faint); }
 .field input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.field input[aria-invalid="true"] { border-color: var(--pink); }
-.field__error { margin-top: 8px; color: var(--blush); font-size: 0.875rem; }
+.field input[aria-invalid="true"] { border-color: var(--error); }
+/* one ring at a time: while you are in the field the ivory ring alone shows it, and the message below says what is wrong */
+.field input[aria-invalid="true"]:focus-visible { border-color: var(--ink); outline-offset: 0; }
+.field__error { margin-top: 8px; color: var(--error); font-size: 0.875rem; }
 
 /* one choice: a real radio button inside a card */
 .opt { position: relative; display: block; cursor: pointer; }
