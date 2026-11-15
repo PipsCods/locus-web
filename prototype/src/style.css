@@ -80,9 +80,19 @@ body.pond-lite .how__card { -webkit-backdrop-filter: none; backdrop-filter: none
 .nav__in { display: flex; align-items: center; gap: 28px; height: 64px; }
 .nav__logo { margin-left: -8px; }
 .nav__logo img { height: 42px; width: auto; }
-.nav__links { display: flex; gap: 26px; margin-left: auto; font-size: 0.9375rem; }
-.nav__links a { text-decoration: none; color: var(--soft); transition: color 0.15s; }
-.nav__links a:hover { color: var(--ink); }
+/* the same header on every page; the page you are on is marked like a chosen option on /check */
+.nav__links { display: flex; gap: 8px; margin-left: auto; font-size: 0.9375rem; }
+.nav__links a {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  line-height: 1;
+  text-decoration: none;
+  color: var(--soft);
+  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+}
+.nav__links a:hover { border-color: var(--green); color: var(--ink); }
+.nav__links a[aria-current="page"] { border-color: var(--ink); color: var(--ink); background: #0d1513; }
 
 .btn {
   display: inline-flex;
@@ -212,7 +222,7 @@ body.has-pond .lotus { visibility: hidden; } /* the flat logo only shows when th
   pointer-events: none;
   will-change: transform;
 }
-.chip.is-on { border-color: var(--pink); color: var(--ink); }
+.chip.is-on { border-color: var(--ink); color: var(--ink); }
 .chip { color: var(--soft); transition: border-color 0.25s, color 0.25s; }
 .chip::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: var(--lead, 14px); background: var(--green); }
 .panel .pill { position: absolute; top: calc(clamp(16px, 2.6vw, 30px) + 86px); right: clamp(16px, 2.6vw, 30px); opacity: 0; }
@@ -250,7 +260,7 @@ body.has-pond .lotus { visibility: hidden; } /* the flat logo only shows when th
   transition: border-color 0.5s, color 0.5s, background-color 0.5s;
 }
 .steps li.is-active { color: var(--ink); }
-.steps li.is-active .steps__n { border-color: var(--pink); background: var(--pink); color: var(--forest); }
+.steps li.is-active .steps__n { border-color: var(--ink); background: var(--ink); color: var(--black); }
 
 /* ── how it works, pinned over the pond ──────────────────────── */
 
@@ -306,7 +316,7 @@ body.has-pond .how__pin::before { /* darker water behind the words */
   body.has-pond .how__card { align-self: end; }
   body.has-pond .how__card .steps li:not(.is-active) { display: none; }
   body.has-pond .how__card .readout__now { min-height: 5em; }
-  .nav__links { display: none; }
+  .nav__wide { display: none; } /* on phones the story is reached by scrolling the home page */
   .nav__in { justify-content: space-between; }
   .section__head { grid-template-columns: minmax(0, 1fr); }
   .steps { grid-template-columns: minmax(0, 1fr); }
@@ -349,7 +359,6 @@ body.art-paper .how__card { background: rgba(247, 243, 237, 0.78); }
 body.art-paper.pond-lite .how__card { background: rgba(247, 243, 237, 0.92); }
 body.art-paper.has-pond .how__pin::before { background: linear-gradient(90deg, rgba(247, 243, 237, 0.9), rgba(247, 243, 237, 0)); }
 body.art-paper .tag--server .label, body.art-paper .chip--locus b { color: #b04a78; } /* pink is too pale to read as small text on paper */
-body.art-paper .chip.is-on { border-color: #b04a78; }
 @media (max-width: 900px) {
   body.art-paper.has-pond .how__pin::before { background: linear-gradient(180deg, rgba(247, 243, 237, 0.86), rgba(247, 243, 237, 0) 26%, rgba(247, 243, 237, 0) 60%, rgba(247, 243, 237, 0.88)); }
 }

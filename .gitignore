@@ -2,12 +2,27 @@
 node_modules/
 dist/
 
-# Cloudflare's local working files
+# a stray, empty lock file at the top level; the real one lives in prototype/
+/package-lock.json
+
+# Cloudflare's local working files, and the secrets its local runner reads
 .wrangler/
+.dev.vars*
+.env
+.env.*
+!.env.example
 
 # emails collected by the local dev server while testing the "Check your server" form
 .leads.dev.jsonl
 
-# machine clutter
+# working files of AI coding tools: session state, recordings and personal settings
+.omc/
+.claude/settings.local.json
+graphify-out/
+
+# editors and machine clutter
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db
 *.log
