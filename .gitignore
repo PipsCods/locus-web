@@ -15,6 +15,10 @@ dist/
 # emails collected by the local dev server while testing the "Check your server" form
 .leads.dev.jsonl
 
+# preview screenshots for reviewing designs: kept on disk, not used by the site
+prototype/previews/
+mockups/previews/
+
 # working files of AI coding tools: session state, recordings and personal settings
 .omc/
 .claude/settings.local.json
