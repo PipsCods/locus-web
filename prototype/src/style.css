@@ -19,6 +19,7 @@
   --green: #275747;
   --pink: #e9a0b6;
   --blush: #f3c8d4;
+  --gold: #f0c75a; /* the heart of the lotus (stamens in lotus.js): kept for "AI" in the headline, nowhere else */
   --error: #e85c48; /* redder and darker than pink, so a mistake never looks like an action */
 
   --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
@@ -78,6 +79,7 @@ p { text-wrap: pretty; }
    blurring whatever moves behind a panel is redone for every picture. A more solid panel reads the same. */
 body.pond-lite .nav { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(5, 7, 6, 0.9); }
 body.pond-lite .how__card { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(8, 11, 10, 0.86); }
+body.pond-lite .hero__copy::before { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--black) 72%, transparent); }
 .nav__in { display: flex; align-items: center; gap: 28px; height: 64px; }
 .nav__logo { margin-left: -8px; }
 .nav__logo img { height: 42px; width: auto; }
@@ -93,6 +95,10 @@ body.pond-lite .how__card { -webkit-backdrop-filter: none; backdrop-filter: none
   transition: border-color 0.15s, color 0.15s, background-color 0.15s;
 }
 .nav__links a:hover { border-color: var(--green); color: var(--ink); }
+/* the one action of the site lives in the header: pink, like every action */
+.nav__links .nav__cta { background: var(--pink); border-color: var(--pink); color: var(--forest); font-weight: 500; }
+.nav__links .nav__cta:hover { background: var(--blush); border-color: var(--blush); color: var(--forest); }
+/* on the page it leads to, it turns into "you are here" (ivory), not an action */
 .nav__links a[aria-current="page"] { border-color: var(--ink); color: var(--ink); background: #0d1513; }
 
 .btn {
@@ -149,18 +155,23 @@ body.pond-lite .how__card { -webkit-backdrop-filter: none; backdrop-filter: none
 body.has-pond .lotus { visibility: hidden; } /* the flat logo only shows when the 3D pond cannot run */
 
 .hero__copy { position: relative; max-width: 1040px; }
-.hero__copy::before { /* a soft dark pool behind the words, so they stay readable over moving water */
+.hero__copy::before { /* shallow depth of field: the water behind the words goes soft and dim, with no edge, while the lotus above stays sharp */
   content: "";
   position: absolute;
   z-index: -1;
-  inset: -70px -14vw -50px;
-  background: radial-gradient(58% 64% at 50% 50%, rgba(5, 7, 6, 0.8), rgba(5, 7, 6, 0) 76%);
+  inset: -130px -16vw -110px;
+  background: color-mix(in srgb, var(--black) 50%, transparent); /* --black turns ivory on paper, so this works in both themes */
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  -webkit-mask-image: radial-gradient(closest-side, #000 50%, transparent);
+  mask-image: radial-gradient(closest-side, #000 50%, transparent);
 }
 .hero h1 {
   font-size: clamp(2.3rem, 5.2vw, 4rem);
   letter-spacing: -0.045em;
   line-height: 0.98;
 }
+.hero__ai { color: var(--gold); }
 .hero__sub {
   margin: 24px auto 0;
   max-width: 50ch;
@@ -350,11 +361,11 @@ body.art-paper {
   --soft: rgba(16, 47, 41, 0.76);
   --faint: rgba(16, 47, 41, 0.5);
   --line: rgba(16, 47, 41, 0.16);
+  --gold: #8c6a12; /* the light gold is unreadable on paper (1.5:1); this one is 4.5:1 */
   color-scheme: light;
 }
 body.art-paper .nav { background: rgba(247, 243, 237, 0.8); }
 body.art-paper.pond-lite .nav { background: rgba(247, 243, 237, 0.94); }
-body.art-paper .hero__copy::before { background: radial-gradient(58% 64% at 50% 50%, rgba(247, 243, 237, 0.88), rgba(247, 243, 237, 0) 76%); }
 body.art-paper .chip { background: rgba(247, 243, 237, 0.9); }
 body.art-paper .how__card { background: rgba(247, 243, 237, 0.78); }
 body.art-paper.pond-lite .how__card { background: rgba(247, 243, 237, 0.92); }

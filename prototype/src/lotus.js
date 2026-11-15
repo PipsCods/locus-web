@@ -302,12 +302,13 @@ export function createFlower() {
     sepals.push(baked(sepalGeo));
   }
   flower.add(new THREE.Mesh(mergeGeometries(sepals), sepalMat));
-  // stamens: three rings of fine curved filaments with darker tips
-  const filament = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(V(0, 0, 0), V(0, 0.24, -0.07), V(0, 0.47, 0.02)), 8, 0.012, 5, false);
+  // The heart: where a lotus has stamens, a crown of golden "AI particles" in the same three rings, the same gold
+  // as "AI" in the headline. They are drawn like the lights that carry the model across the water in "How it works"
+  // (story.js): small solid beads, lit from within, that rise off the tips with a short comet's trail.
   const RINGS = [[38, 0.16, 40], [30, 0.11, 27], [20, 0.06, 12]];
-  const count = RINGS.reduce((s, r) => s + r[0], 0);
-  const filaments = new THREE.InstancedMesh(filament, new THREE.MeshStandardMaterial({ color: 0xf6d77a, roughness: 0.55, emissive: 0xb8860b, emissiveIntensity: 0.35 }), count);
-  const anthers = new THREE.InstancedMesh(new THREE.SphereGeometry(0.022, 8, 6), new THREE.MeshStandardMaterial({ color: 0xf2b23c, roughness: 0.6, emissive: 0xa35a00, emissiveIntensity: 0.3 }), count);
+  const stalk = new THREE.QuadraticBezierCurve3(V(0, 0, 0), V(0, 0.24, -0.07), V(0, 0.47, 0.02)); // the curve a stamen would follow
+  const TALL = V(1.15, 1.45, 1.15); // stretched so the crown rises above the inner petals
+  const beads = [], tips = [];
   const d = new THREE.Object3D();
   let si = 0;
   for (const [n, rad, lean] of RINGS) for (let i = 0; i < n; i++, si++) {
@@ -316,16 +317,58 @@ export function createFlower() {
     d.rotation.set(0, 0, 0); d.scale.set(1, 0.85 + rnd(si + 60) * 0.3, 1);
     d.rotateY(a); d.rotateX(-THREE.MathUtils.degToRad(lean + (rnd(si + 30) - 0.5) * 10));
     d.updateMatrix();
-    filaments.setMatrixAt(si, d.matrix);
-    const tip = V(0, 0.47, 0.02).applyMatrix4(d.matrix);
-    d.position.copy(tip); d.scale.set(1, 2.3, 1); d.updateMatrix();
-    anthers.setMatrixAt(si, d.matrix);
+    for (let k = 0; k < 4; k++) beads.push({ at: stalk.getPoint(0.3 + k * 0.15 + rnd(si * 7 + k) * 0.08).applyMatrix4(d.matrix).multiply(TALL), r: 0.008 + k * 0.001 });
+    const tip = stalk.getPoint(1).applyMatrix4(d.matrix).multiply(TALL);
+    tips.push(tip);
+    beads.push({ at: tip, r: 0.017 });
   }
-  flower.add(filaments, anthers);
-  const stigma = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.08, 20), new THREE.MeshStandardMaterial({ color: 0xf0c75a, roughness: 0.6 }));
+  const lit = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf0c75a).multiplyScalar(1.35) }); // the headline's gold, pushed past full so it glows like the story's lights, yet stays gold
+  const ball = new THREE.SphereGeometry(1, 10, 8);
+  const m = new THREE.Object3D();
+  const crown = new THREE.InstancedMesh(ball, lit, beads.length);
+  beads.forEach((b, i) => { m.position.copy(b.at); m.scale.setScalar(b.r); m.updateMatrix(); crown.setMatrixAt(i, m.matrix); });
+  flower.add(crown);
+  // rising: always a few dozen on their way up, each born at a tip, drifting up and a little outwards, swaying, with a trail
+  const RISE = 60, TRAIL = 4;
+  const rising = new THREE.InstancedMesh(ball, lit, RISE * TRAIL);
+  rising.frustumCulled = false;
+  flower.add(rising);
+  const up = Array.from({ length: RISE }, () => ({}));
+  let born = 0, started = false;
+  const lift = (s, t, age0 = 0) => {
+    born++;
+    s.from = tips[Math.floor(rnd(born + 400) * tips.length)];
+    s.out = V(s.from.x, 0, s.from.z).normalize();
+    s.span = 2.5 + rnd(born + 300) * 2.5;
+    s.rise = 0.07 + rnd(born + 500) * 0.06; // gone before it climbs out of the picture
+    s.phase = rnd(born + 600) * 6.28;
+    s.at = t - age0 * s.span;
+  };
+  const where = (s, age, out) => out.set(
+    s.from.x + s.out.x * age * 0.03 + Math.sin(age * 1.3 + s.phase) * 0.02,
+    s.from.y + age * s.rise,
+    s.from.z + s.out.z * age * 0.03 + Math.cos(age * 1.1 + s.phase) * 0.02);
+  flower.userData.pollen = (t, moving) => { // called once a frame; `moving` is false when the visitor asked for less motion
+    rising.visible = moving;
+    if (!moving) return;
+    if (!started) { up.forEach((s, i) => lift(s, t, rnd(i + 900))); started = true; } // start them at different points of their lives
+    up.forEach((s, i) => {
+      let age = t - s.at;
+      if (age > s.span || age < 0) { lift(s, t); age = 0; }
+      const q = age / s.span, size = 0.014 * Math.min(1, q * 8) * Math.min(1, (1 - q) * 4); // grows in quickly, shrinks away at the end
+      for (let k = 0; k < TRAIL; k++) {
+        where(s, Math.max(0, age - k * 0.09), m.position);
+        m.scale.setScalar(size * (1 - k * 0.22));
+        m.updateMatrix();
+        rising.setMatrixAt(i * TRAIL + k, m.matrix);
+      }
+    });
+    rising.instanceMatrix.needsUpdate = true;
+  };
+  const stigma = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.08, 20), new THREE.MeshStandardMaterial({ color: 0xf0c75a, roughness: 0.6, emissive: 0xb8860b, emissiveIntensity: 0.6 }));
   stigma.position.y = 0.15;
   flower.add(stigma);
-  const heart = new THREE.PointLight(0xffd9a8, 0.5, 2.2, 2); // a little warmth inside the cup
+  const heart = new THREE.PointLight(0xffc845, 2.4, 2.2, 2); // a golden glow inside the cup
   heart.position.y = 0.5;
   flower.add(heart);
   flower.scale.setScalar(1.08);
@@ -521,6 +564,7 @@ export function initLotus(host, opts = {}) {
     }
     flower.position.y = 0.03 + by;
     flower.rotation.set(tx, Math.PI / 8 + Math.sin(t * 0.13) * 0.12, tz); // turned so a gap between outer petals faces the viewer; it sways a few degrees, it doesn't spin
+    flower.userData.pollen(t, !reduce);
     for (const p of pads) {
       const ph = p.userData.phase;
       p.position.y = PAD_Y + Math.sin(t * 0.9 + ph) * 0.006;

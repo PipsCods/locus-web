@@ -50,6 +50,7 @@ const COPY_FRAG = "precision highp float; uniform sampler2D tPrev; varying vec2 
 export function createWater(renderer, opts = {}) {
   const SIM = opts.size ?? 30;
   const RES0 = opts.res ?? 640, RATE0 = opts.rate ?? 120;   // the grid the look was tuned on
+  const SLOPE = 2; // how strongly ripples bend the light: low, so the waves are felt more than seen (was 5)
   const DROP0 = opts.dropRadius ?? 0.135, DAMP0 = opts.damping ?? 0.994;
   const [CX, CZ] = opts.center ?? [0, 0]; // world position of the middle of the simulated water
   const [fadeNear, fadeFar] = opts.fade ?? [9, 22];
@@ -101,7 +102,7 @@ export function createWater(renderer, opts = {}) {
       uMirror: { value: opts.mirror ?? 1 },   // how strongly the surface mirrors what stands on it
       uGlow: { value: opts.glow ?? 1 },       // strength of the back light's path on the water
       uE: { value: 1 / res },                 // one cell of the ripple grid
-      uSlope: { value: 5 },                   // keeps ripples looking the same on a coarser grid
+      uSlope: { value: SLOPE },               // keeps ripples looking the same on a coarser grid
       uBlend: { value: 0 },                   // how far we are between two simulation steps
       ...(opts.art ? waterUniforms(opts.art, opts.sky ?? 0x050706) : {}),
     },
@@ -150,10 +151,7 @@ export function createWater(renderer, opts = {}) {
         float fres = pow(1.0 - max(dot(view, n), 0.0), 3.0);
         vec3 rdir = reflect(-view, n);                             // the night sky the water mirrors
         vec3 sky = mix(vec3(0.012, 0.046, 0.037), vec3(0.0, 0.004, 0.003), pow(clamp(rdir.y, 0.0, 1.0), 0.5));
-        sky += vec3(0.95, 0.6, 0.72) * pow(max(dot(rdir, uLight), 0.0), 48.0) * 0.08 * uGlow;
         vec3 col = color + sky * (0.35 + 0.65 * fres) + mirror * (0.5 + 0.45 * fres) * uMirror;
-        float glint = pow(max(dot(n, normalize(view + uLight)), 0.0), 500.0);
-        col += vec3(1.0, 0.82, 0.88) * glint * 0.16 * uGlow;
         float r = length(vPos.xz);
         float lit = clamp(-dot(raw, normalize(uLight.xz)) * 2.4, 0.0, 0.3) + clamp(length(raw) * 0.6, 0.0, 0.08);
         col += mix(vec3(0.14, 0.32, 0.28), vec3(0.85, 0.5, 0.62), exp(-r * 0.22)) * lit; // rings catch the back light
@@ -208,7 +206,7 @@ export function createWater(renderer, opts = {}) {
       u.uDamp.value = Math.pow(DAMP0, RATE0 / rate);    // same fading per second
       dropGain = (DROP0 / r) ** 2;                      // a wider drop moves more water: weaken it to match
       mesh.material.uniforms.uE.value = 1 / res;
-      mesh.material.uniforms.uSlope.value = (5 * res) / RES0;
+      mesh.material.uniforms.uSlope.value = (SLOPE * res) / RES0;
     },
   };
 }
