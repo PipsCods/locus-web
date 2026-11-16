@@ -11,8 +11,12 @@ const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const devLeads = () => ({
   name: "locus-dev-leads",
   configureServer(server) {
-    // Cloudflare serves check.html at /check; do the same here so links work in both places
-    server.middlewares.use((req, _res, next) => { if (req.url === "/check" || req.url?.startsWith("/check?")) req.url = req.url.replace("/check", "/check.html"); next(); });
+    // Cloudflare serves check.html at /check (and demo.html at /demo); do the same here so links work in both places
+    server.middlewares.use((req, _res, next) => {
+      const page = req.url?.match(/^\/(check|demo)(?=$|\?)/)?.[1];
+      if (page) req.url = req.url.replace(`/${page}`, `/${page}.html`);
+      next();
+    });
     server.middlewares.use("/api/lead", (req, res) => {
       const send = (status, data) => { res.statusCode = status; res.setHeader("content-type", "application/json; charset=utf-8"); res.end(JSON.stringify(data)); };
       if (req.method !== "POST") return send(405, { ok: false, error: "Use POST." });
@@ -36,7 +40,7 @@ const devLeads = () => ({
 export default defineConfig({
   plugins: [devLeads()],
   build: {
-    // three pages: the landing page, "Check your server", and the page shown for an address that does not exist
-    rollupOptions: { input: { index: here("./index.html"), check: here("./check.html"), 404: here("./404.html") } },
+    // four pages: the landing page, "Check your server", "Try it live", and the page shown for an address that does not exist
+    rollupOptions: { input: { index: here("./index.html"), check: here("./check.html"), demo: here("./demo.html"), 404: here("./404.html") } },
   },
 });

@@ -12,6 +12,9 @@
     "leads": "wrangler d1 execute locus-leads --remote --command \"SELECT id, created_at, email, server, card, model, country FROM leads ORDER BY id DESC LIMIT 100\""
   },
   "dependencies": {
+    "dompurify": "^3.4.18",
+    "marked": "^18.2.1",
+    "pdfjs-dist": "^6.5.438",
     "three": "^0.187.0"
   },
   "devDependencies": {
