@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import { appendFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { cleanLead } from "./shared/lead.js";
+import { demoApi } from "./dev/demo-api.js";
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -27,6 +28,8 @@ const devLeads = () => ({
         send(200, { ok: true });
       });
     });
+    // and a stand-in for the live demo's API (dev/demo-api.js explains how to pick a status)
+    server.middlewares.use("/api/demo", demoApi);
   },
 });
 
