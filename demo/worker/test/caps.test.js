@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { requestCapError, canAdmit } from "../src/caps.js";
 import { createDemo, transition, admitToBooting, capCounts, getDemo } from "../src/db.js";
+import { admit } from "../src/pipeline.js";
 import { config } from "../src/config.js";
-import { resetDb } from "./helpers.js";
+import { resetDb, makeTestDeps } from "./helpers.js";
 
 const NOW = Date.parse("2026-11-16T12:00:00Z");
 const caps = config({}).caps;
@@ -53,6 +54,26 @@ describe("caps (D1)", () => {
     const c = await capCounts(env.DB, { email: "jane@acme-industries.com", domain: "acme-industries.com", ip: "" }, caps, NOW);
     expect(c.emailRecent).toBe(0);
     expect(c.pendingForEmail).toBe(1);
+  });
+
+  it("third concurrent demo is queued, then admitted when a slot frees", async () => {
+    const { deps, created } = makeTestDeps();
+    const a = await confirmed("a@one.com"), b = await confirmed("b@two.com"), c = await confirmed("c@three.com");
+    expect(await admit(deps, a)).toBe("booting");
+    expect(await admit(deps, b)).toBe("booting");
+    expect(await admit(deps, c)).toBe("queued");
+    expect(created.provision.map((p) => p.params.demoId)).toEqual([a, b]);
+    await transition(env.DB, a, "failed", {}, { now: NOW });
+    expect(await admitToBooting(env.DB, c, caps, NOW)).toBe(true);
+    expect((await getDemo(env.DB, c)).status).toBe("booting");
+  });
+
+  it("the daily total holds even with free slots", async () => {
+    const { deps } = makeTestDeps({ vars: { CAP_DAILY_TOTAL: "1", CAP_MAX_CONCURRENT: "5" } });
+    const a = await confirmed("a@one.com"), b = await confirmed("b@two.com");
+    expect(await admit(deps, a)).toBe("booting");
+    await transition(env.DB, a, "ended", {}, { now: NOW });
+    expect(await admit(deps, b)).toBe("queued");
   });
 
   it("concurrent admissions cannot exceed the cap", async () => {
