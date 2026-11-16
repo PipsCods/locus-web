@@ -1,0 +1,42 @@
+SYNTHETIC DOCUMENT - FICTIONAL COMPANY - FOR DEMO AND BENCHMARK USE ONLY
+
+Kestrel Valve & Pump Systems AG
+Quarterly Management Report, Q3 FY2026 (unaudited)
+Classification: Confidential - Board and Executive Committee
+
+1. Summary
+
+Revenue for the quarter was EUR 184.6 million, up 6.2% year on year (Q3 FY2025: EUR 173.8 million) and 1.4% below plan (EUR 187.2 million). Organic growth was 4.9%; the acquisition of Brenner Fluidtechnik GmbH, consolidated from 1 August, contributed EUR 2.3 million. Order intake rose 9.8% to EUR 201.3 million, giving a book-to-bill ratio of 1.09. The order backlog stands at EUR 412.0 million, the highest in the company's history.
+
+Adjusted EBITDA was EUR 27.1 million (margin 14.7%), against EUR 26.9 million (15.5%) a year ago. The margin decline reflects higher steel and copper input costs, a one-off EUR 1.8 million charge for the Lyon plant consolidation, and EUR 0.9 million of integration costs for Brenner. Net income was EUR 12.4 million (Q3 FY2025: EUR 13.9 million). Earnings per share were EUR 0.62 (EUR 0.70).
+
+2. Segments
+
+Industrial Pumps: revenue EUR 96.2 million (+3.1%), EBITDA margin 16.8% (17.9%). Demand from the chemicals sector remained weak in Germany, offset by strong water-utility orders in the Nordics and the Middle East.
+
+Precision Valves: revenue EUR 61.9 million (+11.4%), EBITDA margin 15.2% (14.6%). Semiconductor fab projects in Ireland and Arizona drove growth. Two customers now account for 38% of segment revenue.
+
+Service & Aftermarket: revenue EUR 26.5 million (+6.0%), EBITDA margin 22.4% (22.1%). Recurring service contracts grew to 61% of segment revenue.
+
+3. Cash flow and balance sheet
+
+Operating cash flow was EUR 9.8 million (Q3 FY2025: EUR 21.4 million). Net working capital increased by EUR 14.6 million, mainly inventory built ahead of the Lyon consolidation and longer payment terms granted to two large utility customers. Capital expenditure was EUR 8.1 million. Free cash flow was EUR 1.7 million.
+
+Net debt rose to EUR 148.3 million (30 June: EUR 121.5 million), driven by the Brenner purchase price of EUR 24.0 million. Leverage (net debt / LTM adjusted EBITDA) is 1.42x, against a covenant ceiling of 2.75x. Liquidity headroom, including the undrawn revolving credit facility, is EUR 96.0 million. The EUR 75 million Schuldschein tranche matures in March FY2027; refinancing talks have started.
+
+4. Risks and open issues
+
+- Customer concentration: the two largest semiconductor customers represent 12.8% of group revenue; one has announced a six-month pause at its Arizona site starting January.
+- Input costs: steel and copper prices are 14% above budget assumptions. Price escalation clauses cover about 55% of the backlog.
+- Lyon consolidation: transfer of production to Brno is six weeks behind schedule; a further EUR 1.2 to 1.6 million of one-off costs is expected in Q4.
+- Warranty: a seal defect in the KVX-400 valve series (shipped Q1-Q2) has led to 37 field claims. A provision of EUR 2.1 million has been booked; the supplier has accepted partial liability.
+- Cyber: a phishing incident in September compromised one sales mailbox. No customer data loss has been identified; the external review closes in November.
+- FX: 31% of revenue is in USD; the hedge ratio for FY2027 is 48% against a policy target of 60%.
+
+5. Outlook
+
+Management confirms full-year revenue guidance of EUR 720 to 740 million and lowers adjusted EBITDA margin guidance from 15.5-16.0% to 14.8-15.3%, reflecting input costs and the Lyon delay. Free cash flow is expected to recover in Q4 as inventory is released after the Brno transfer.
+
+6. Headcount
+
+Group headcount at 30 September was 3,412 FTE (30 June: 3,276), including 118 FTE from Brenner. Voluntary attrition over the last twelve months was 7.9%.
