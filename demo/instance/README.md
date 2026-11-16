@@ -68,7 +68,7 @@ vastai show instances                 # must be empty
 Paste `results.md` into `demo/BENCHMARK.md` and fill in the decision.
 
 What `bench.sh` does, per quant (`UD-IQ4_XS`; `UD-Q4_K_XL` only if the slice
-has >= 190 GB RAM; `UD-Q2_K_XL`):
+has >= 190 GB RAM):
 
 1. `hf download` with Xet high-performance mode, timed.
 2. Per runtime, a binary search over server loads for the smallest `-ncmoe`

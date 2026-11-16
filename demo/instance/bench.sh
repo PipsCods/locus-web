@@ -14,7 +14,7 @@
 # (tables to paste into demo/BENCHMARK.md), hardware.json, logs/, quality/.
 #
 # Usage: bench.sh [options]
-#   --quants "Q ..."        default: UD-IQ4_XS, UD-Q4_K_XL (only if RAM >= 190 GB), UD-Q2_K_XL
+#   --quants "Q ..."        default: UD-IQ4_XS, UD-Q4_K_XL (only if RAM >= 190 GB)
 #   --runtimes "R ..."      default: "ik mainline"
 #   --contexts "C ..."      default: "short 16k 32k"
 #   --modes "M ..."         thinking modes, default: "off low"
@@ -339,7 +339,6 @@ if [[ -z "$QUANTS" ]]; then
   else
     log "slice RAM ${RAM_SLICE_GB} GB < 190 GB: skipping UD-Q4_K_XL"
   fi
-  QUANTS+=" UD-Q2_K_XL"
 fi
 log "quants: $QUANTS | runtimes: $RUNTIMES | threads: $THREADS_LIST | contexts: $CONTEXTS | modes: $MODES"
 

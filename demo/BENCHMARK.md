@@ -41,7 +41,6 @@ Sizes the Phase 3 wait (the visitor gets an email when the machine is ready).
 |---|---|---|---|---|---|
 | UD-IQ4_XS | | | | | |
 | UD-Q4_K_XL | | | | | |
-| UD-Q2_K_XL | | | | | |
 
 ## Throughput
 
@@ -59,8 +58,6 @@ Tokens/s, mean over repeats. Prompt lengths: short (~60 tokens), 16k, 32k.
 | UD-IQ4_XS | mainline | | | | | | |
 | UD-Q4_K_XL | ik | | | | | | |
 | UD-Q4_K_XL | mainline | | | | | | |
-| UD-Q2_K_XL | ik | | | | | | n/a |
-| UD-Q2_K_XL | mainline | | | | | | n/a |
 
 ## Quality spot check
 
@@ -72,7 +69,6 @@ arithmetic check right, anything wrong.
 |---|---|---|
 | UD-IQ4_XS | | |
 | UD-Q4_K_XL | | |
-| UD-Q2_K_XL | | |
 
 ## Decision
 
