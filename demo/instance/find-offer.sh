@@ -160,7 +160,9 @@ create=(vastai create instance "$OFFER_ID"
   --ssh --direct
   --cancel-unavail
   # ssh launch mode hides -e vars from ssh sessions unless exported here.
-  --onstart-cmd 'env | grep -E "^(CONTAINER_|HF_|VAST_)" >> /etc/environment'
+  # The chown/chmod works around hosts that leave authorized_keys with modes
+  # sshd refuses ("bad ownership or modes"), which locks ssh out entirely.
+  --onstart-cmd 'chown -R root:root /root/.ssh; chmod 700 /root /root/.ssh; chmod 600 /root/.ssh/authorized_keys; env | grep -E "^(CONTAINER_|HF_|VAST_)" >> /etc/environment'
   --raw)
 if [[ -n "$LOGIN" ]]; then
   create+=(--login "$LOGIN")
