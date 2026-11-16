@@ -1,11 +1,12 @@
 // locus-demo Worker: serves /api/demo/* (reached from the Pages site through the DEMO service
-// binding) and runs the screening Workflow.
+// binding) and runs the screening and provisioning Workflows.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { makeDeps } from "./deps.js";
 import { fail } from "./http.js";
 import { requestDemo, confirm, status, chat, ownerDecide, manual } from "./routes.js";
 import { screen } from "./pipeline.js";
+import { provision } from "./provision.js";
 
 const ROUTES = {
   "POST /api/demo/request": requestDemo,
@@ -45,5 +46,11 @@ export default {
 export class ChecksWorkflow extends WorkflowEntrypoint {
   async run(event, step) {
     return screen(makeDeps(this.env), event.payload.demoId, step);
+  }
+}
+
+export class ProvisionWorkflow extends WorkflowEntrypoint {
+  async run(event, step) {
+    return provision(makeDeps(this.env), event.payload.demoId, step);
   }
 }

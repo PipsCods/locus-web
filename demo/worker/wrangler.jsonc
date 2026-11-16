@@ -1,6 +1,6 @@
 {
 	// locus-demo: the backend of the live demo (see README.md).
-	// Serves /api/demo/* behind the Pages site (service binding DEMO) and runs the screening Workflow.
+	// Serves /api/demo/* behind the Pages site (service binding DEMO), runs two Workflows.
 	//
 	// Secrets (set with `npx wrangler secret put NAME`; never put them in this file):
 	//   SIGNING_SECRET        ≥32 random chars; signs email links and the session cookie
@@ -28,7 +28,8 @@
 	],
 
 	"workflows": [
-		{ "name": "locus-demo-checks", "binding": "CHECKS", "class_name": "ChecksWorkflow" }
+		{ "name": "locus-demo-checks", "binding": "CHECKS", "class_name": "ChecksWorkflow" },
+		{ "name": "locus-demo-provision", "binding": "PROVISION", "class_name": "ProvisionWorkflow" }
 	],
 
 
