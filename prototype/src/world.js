@@ -110,12 +110,13 @@ export function initWorld({ host, how, dom }) {
   // Floating leaves, as three fixed clusters (round the lotus, along the way, round the story): one mesh each.
   const padMat = new THREE.MeshStandardMaterial({ name: "pad", map: padTexture(), roughness: 0.78, metalness: 0, envMapIntensity: 0.3, side: THREE.DoubleSide });
   const m4 = new THREE.Matrix4();
-  const padCluster = (list) => scene.add(new THREE.Mesh(mergeGeometries(list.map(([x, z, r, turn]) => padGeometry(r).applyMatrix4(m4.makeRotationY(turn).setPosition(x, 0.022, z)))), padMat));
+  const pads = []; // every leaf as [x, z, radius]: the story's lights keep clear of them
+  const padCluster = (list) => { pads.push(...list); scene.add(new THREE.Mesh(mergeGeometries(list.map(([x, z, r, turn]) => padGeometry(r).applyMatrix4(m4.makeRotationY(turn).setPosition(x, 0.022, z)))), padMat)); };
   padCluster([[-2.7, -1.0, 1.55, 0.5], [2.6, -1.8, 1.35, 2.3], [-0.5, -3.4, 1.7, 4.1], [4.3, 0.5, 1.15, 3.3], [-4.6, 0.9, 1.25, 5.6], [1.9, 1.7, 0.62, 1.2]]);
   padCluster([[8.5, 2.6, 1.2, 0.9], [11.5, -4.2, 1.6, 2.7], [15.5, 1.6, 0.9, 4.4], [18.0, -6.4, 1.3, 1.8], [21.5, 4.4, 1.5, 3.6], [6.2, -6.0, 1.0, 5.1]]); // they slide past as the view crosses the water
   padCluster([[-5.2, -3.4, 1.5], [5.6, -4.4, 1.15], [-5.6, 6.4, 0.9], [6.1, 7.2, 1.7], [0.2, 9.4, 1.25]].map(([x, z, r], i) => [STAGE.x + x, STAGE.z + z, r, i * 1.3 + 0.4]));
 
-  const story = createStory(scene, water, dom, { wake: art ? art.wake : 1 });
+  const story = createStory(scene, water, dom, { wake: art ? art.wake : 1, pads });
   let cutouts = null;
   if (art) {
     paintify(scene, art);

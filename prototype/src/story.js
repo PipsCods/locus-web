@@ -55,7 +55,7 @@ const boardTexture = () => canvasTexture(1024, 720, (g, w, h) => {
   for (let i = 0; i < 160; i++) g.fillRect(rand(i + 500) * w, rand(i + 900) * h, 4, 4);
 });
 
-export function createStory(scene, water, dom, { wake = 1 } = {}) {
+export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { // pads: the floating leaves, as [x, z, radius]
   // ── materials ──
   const std = (color, metalness, roughness, extra = {}) => new THREE.MeshStandardMaterial({ color, metalness, roughness, ...extra });
   const glow = () => new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -233,7 +233,9 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
     fitRig(rigs.wide, [...corners(racksG, (RACK_L + 1.4) / 2, RACK.y0 + RACK.h + 0.3, (RACK.d + 1.6) / 2), ...boardPts, above("racks", 1.5), above("server", 1.5)], frame);
     fitRig(rigs.close, [...boardPts, above("ram", 1.0), above("cpu", 1.0), above("gpu", 1.7)], frame);
 
-    // routes: off the foot of a rack, a slow meander over the water, aboard at the board's edge, up into a memory cell (or the card)
+    // routes: off the foot of a rack, a slow meander over the water, aboard at the board's edge, up into a memory cell (or the card).
+    // A floating leaf in the way is not swum through: a light that meets it near the rim swims round it, and one
+    // heading for its middle leaps over it.
     journeys = [];
     const inRaft = (p) => Math.abs(p.x - S.x) < BX + 0.8 && Math.abs(p.z - S.z) < BZ + 0.8;
     for (let i = 0; i < NMOTE; i++) {
@@ -244,9 +246,27 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
       const start = V((rand(i + 1) - 0.5) * (RACK_L - 0.6), 0, RACK.d / 2 + 0.95).multiplyScalar(rs).add(V(R.x, 0, R.z)); start.y = 0.07;
       let edge = start.clone();
       for (let k = 1; k <= 80; k++) { const q = start.clone().lerp(end, k / 80); q.y = 0.07; if (inRaft(q)) break; edge = q; }
-      const dir = edge.clone().sub(start), side = V(-dir.z, 0, dir.x).normalize(), bend = (rand(i + 140) - 0.5) * 2.4;
-      const pts = [start, start.clone().lerp(edge, 0.33).addScaledVector(side, bend), start.clone().lerp(edge, 0.7).addScaledVector(side, -bend * 0.6), edge, edge.clone().lerp(end, 0.5).setY(end.y + 1.0), end];
-      journeys.push({ curve: new THREE.CatmullRomCurve3(pts, false, "centripetal"), t0: T_MOVE + rand(i + 200) * 4.6, dur: 4.6 + rand(i + 220) * 1.6, toCard, last: start.clone() });
+      const dir = edge.clone().sub(start), L = Math.max(0.01, dir.length()), u = dir.clone().divideScalar(L), side = V(-u.z, 0, u.x), bend = (rand(i + 140) - 0.5) * 2.4;
+      // way-points over the water, each with how far along the straight line it lies
+      let way = [[0.33 * L, start.clone().lerp(edge, 0.33).addScaledVector(side, bend)], [0.7 * L, start.clone().lerp(edge, 0.7).addScaledVector(side, -bend * 0.6)]];
+      const rough = new THREE.CatmullRomCurve3([start, way[0][1], way[1][1], edge], false, "centripetal");
+      for (const [px, pz, pr] of pads) {
+        let near = Infinity, lat = 0; // the closest the meander comes to this leaf, and on which side of its middle
+        for (let k = 0; k <= 48; k++) { rough.getPoint(k / 48, v); const d = Math.hypot(v.x - px, v.z - pz); if (d < near) { near = d; lat = (v.x - px) * side.x + (v.z - pz) * side.z; } }
+        const clear = pr + 0.3, c = V(px, 0.07, pz), along = (px - start.x) * u.x + (pz - start.z) * u.z;
+        if (near >= clear || along < clear * 0.6 || along > L - clear * 0.6) continue; // it passes clear, or the leaf lies at the very start or end
+        way = way.filter(([t]) => Math.abs(t - along) > clear + 0.5); // the meander's own bends give way near the leaf
+        if (rand(i * 3.7 + px) < (Math.abs(lat) < pr * 0.45 ? 0.75 : 0.12)) { // a leap: off the water before the rim, down again past it
+          const half = Math.sqrt(Math.max(0.04, clear * clear - lat * lat)), base = c.clone().addScaledVector(side, lat);
+          for (const [t, y] of [[-half - 0.5, 0.07], [-half, 0.07], [0, 0.4 + half * 0.22 + rand(i + 400) * 0.2], [half, 0.07], [half + 0.5, 0.07]]) way.push([along + t, base.clone().addScaledVector(u, t).setY(y)]);
+        } else { // round it, on the side it was already heading for
+          const s = lat >= 0 ? 1 : -1, out = clear + 0.15 + rand(i + 500) * 0.35;
+          for (const deg of [-55, 0, 55]) { const a = THREE.MathUtils.degToRad(deg); way.push([along + Math.sin(a) * out, c.clone().addScaledVector(side, s * Math.cos(a) * out).addScaledVector(u, Math.sin(a) * out)]); }
+        }
+      }
+      way = way.filter(([t]) => t > 0.25 && t < L - 0.25).sort((a, b) => a[0] - b[0]);
+      const pts = [start, ...way.map((w) => w[1]), edge, edge.clone().lerp(end, 0.5).setY(end.y + 1.0), end];
+      journeys.push({ curve: new THREE.CatmullRomCurve3(pts, false, "centripetal"), t0: T_MOVE + rand(i + 200) * 4.6, dur: 4.6 + rand(i + 220) * 1.6, toCard, last: start.clone(), air: false });
     }
     const arrive = journeys.filter((j) => !j.toCard);
     for (let c = 0; c < NCELL; c++) { const j = arrive[c % arrive.length]; heldAt[c] = j.t0 + j.dur * 0.97 + rand(c + 300) * 0.7; }
@@ -317,16 +337,20 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
       for (let k = 0; k < TRAIL; k++) {
         if (on) {
           j.curve.getPointAt(ss(0, 1, Math.max(0, q - k * 0.011)), pk.position);
+          if (pk.position.y < 0.07) pk.position.y = 0.07; // (the curve dips a hair either side of a leap)
           pk.scale.setScalar((1 - k * 0.22) * Math.min(1, q * 8) * Math.min(1, (1 - q) * 10));
         } else pk.scale.setScalar(0);
         pk.rotation.set(0, 0, 0); pk.updateMatrix();
         motes.setMatrixAt(i * TRAIL + k, pk.matrix);
-        if (on && k === 0 && dt > 0 && pk.position.y < 0.14 && Math.hypot(pk.position.x - j.last.x, pk.position.z - j.last.z) > 0.24) {
-          water.drop(pk.position.x, pk.position.z, -0.014 * wake); // its wake
-          j.last.copy(pk.position);
+        if (on && k === 0 && dt > 0) {
+          if (pk.position.y > 0.22) j.air = true; // in the air: leaping a leaf, or climbing aboard
+          else if (pk.position.y < 0.14) {
+            if (j.air) { water.drop(pk.position.x, pk.position.z, -0.04 * wake); j.last.copy(pk.position); j.air = false; } // down from a leap: a splash
+            else if (Math.hypot(pk.position.x - j.last.x, pk.position.z - j.last.z) > 0.24) { water.drop(pk.position.x, pk.position.z, -0.014 * wake); j.last.copy(pk.position); } // its wake
+          }
         }
       }
-      if (!on) j.last.copy(j.curve.points[0]);
+      if (!on) { j.last.copy(j.curve.points[0]); j.air = false; }
     }
     if (drifting || motesShown) motes.instanceMatrix.needsUpdate = true;
     motesShown = motes.visible = drifting;
