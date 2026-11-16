@@ -1,5 +1,5 @@
 // locus-demo Worker: serves /api/demo/* (reached from the Pages site through the DEMO service
-// binding) and runs the screening and provisioning Workflows.
+// binding), runs the screening and provisioning Workflows, and the 5-minute cleanup sweep.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { makeDeps } from "./deps.js";
@@ -7,6 +7,7 @@ import { fail } from "./http.js";
 import { requestDemo, confirm, status, chat, ownerDecide, manual } from "./routes.js";
 import { screen } from "./pipeline.js";
 import { provision } from "./provision.js";
+import { runSweep } from "./sweep.js";
 
 const ROUTES = {
   "POST /api/demo/request": requestDemo,
@@ -40,6 +41,9 @@ export default {
       return fail(503, "DEV_FAKES is set on a deployed Worker. Remove it.");
     }
     return handle(request, makeDeps(env));
+  },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(runSweep(makeDeps(env)).then((r) => console.log("sweep", JSON.stringify(r))));
   },
 };
 
