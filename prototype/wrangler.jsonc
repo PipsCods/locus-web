@@ -1,5 +1,5 @@
 {
-	// Cloudflare Pages set-up for the site: the built pages in dist/, plus functions/ (the email endpoint).
+	// Cloudflare Pages set-up for the site: the built pages in dist/, plus functions/ (the email endpoint, and the door to the live demo).
 	//
 	// First deploy, from this folder:
 	//   npm install
@@ -13,6 +13,10 @@
 	"name": "locus",
 	"compatibility_date": "2026-11-01",
 	"pages_build_output_dir": "dist",
+	// the live demo: /api/demo/* (functions/api/demo/) hands every request to this Worker (demo/worker/)
+	"services": [
+		{ "binding": "DEMO", "service": "locus-demo" }
+	],
 	"d1_databases": [
 		{
 			"binding": "DB",
