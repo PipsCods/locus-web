@@ -15,8 +15,8 @@
 <header class="nav">
   <div class="wrap nav__in">
     <a class="nav__logo" href="/" aria-label="locus, home"><img src="/locus-wordmark.svg" alt="locus" width="511" height="162"></a>
-    <nav class="nav__links" aria-label="Page">
-      <a href="/#how">How it works</a>
+    <nav class="nav__links" aria-label="Main">
+      <a class="nav__cta" href="/check" aria-current="page">Check your server</a>
     </nav>
   </div>
 </header>
@@ -32,8 +32,22 @@
 
     <form class="check__form" id="check-form" novalidate>
 
+      <!-- the visitor first picks what they came for; the email comes last, right before the estimate it unlocks -->
       <fieldset class="step">
-        <legend><span class="steps__n">1</span>Your work email</legend>
+        <legend><span class="steps__n">1</span>The server you own</legend>
+        <p class="step__hint">Choose its generation, then the set-up closest to yours. Not sure? The model name on the front of the server tells you the generation.</p>
+        <div class="gens" role="radiogroup" aria-label="Server generation" data-gens></div>
+        <div class="configs" role="radiogroup" aria-label="Processors and memory" data-configs></div>
+      </fieldset>
+
+      <fieldset class="step">
+        <legend><span class="steps__n">2</span>The graphics card to add</legend>
+        <p class="step__hint">One card. More memory on it means more of the model sits on the card, and a faster answer.</p>
+        <div class="cards" role="radiogroup" aria-label="Graphics card" data-cards></div>
+      </fieldset>
+
+      <fieldset class="step">
+        <legend><span class="steps__n">3</span>Your work email</legend>
         <p class="step__hint">The estimate appears on this page. We use your email only to follow up on it.</p>
         <div class="field">
           <label class="sr" for="email">Work email</label>
@@ -42,19 +56,6 @@
         </div>
         <!-- people never see this field; scripts that fill in everything give themselves away -->
         <input class="hp" type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true">
-      </fieldset>
-
-      <fieldset class="step">
-        <legend><span class="steps__n">2</span>The server you own</legend>
-        <p class="step__hint">Choose its generation, then the set-up closest to yours. Not sure? The model name on the front of the server tells you the generation.</p>
-        <div class="gens" role="radiogroup" aria-label="Server generation" data-gens></div>
-        <div class="configs" role="radiogroup" aria-label="Processors and memory" data-configs></div>
-      </fieldset>
-
-      <fieldset class="step">
-        <legend><span class="steps__n">3</span>The graphics card to add</legend>
-        <p class="step__hint">One card. More memory on it means more of the model sits on the card, and a faster answer.</p>
-        <div class="cards" role="radiogroup" aria-label="Graphics card" data-cards></div>
       </fieldset>
 
       <div class="check__go">

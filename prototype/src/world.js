@@ -210,6 +210,19 @@ export function initWorld({ host, how, dom }) {
   const lastDrop = { x: 999, z: 999, t: 0 };
   let sway = 0, swayT = 0;
   const calm = () => reduce || still; // the water is not stirred
+  // Behind the headline the water stays as quiet as the lotus's rings are by the time they get there: the cursor
+  // barely stirs it. The quiet zone follows the soft veil behind the words (style.css, .hero__copy::before):
+  // 130px above, 110px below, 16vw to each side, an ellipse that is full up to half way and fades out to its edge.
+  const words = document.querySelector(".hero__copy");
+  const QUIET = 0.2; // how much of the stir is left right behind the words
+  function hush(e) {
+    if (!words) return 1;
+    const r = words.getBoundingClientRect(), side = 0.16 * window.innerWidth;
+    const w = r.width + 2 * side, h = r.height + 240, cx = r.left - side + w / 2, cy = r.top - 130 + h / 2;
+    const d = Math.hypot((e.clientX - cx) / (w / 2), (e.clientY - cy) / (h / 2));
+    const behind = 1 - Math.min(1, Math.max(0, (d - 0.5) / 0.5)); // 1 right behind the words, 0 past the veil's edge
+    return 1 - behind * (1 - QUIET);
+  }
   function toWater(e) {
     ptr.set((e.clientX / W) * 2 - 1, -((e.clientY / H) * 2 - 1));
     swayT = ptr.x;
@@ -220,14 +233,15 @@ export function initWorld({ host, how, dom }) {
     if (calm() || !toWater(e)) return;
     const now = performance.now(), dx = hit.x - lastDrop.x, dz = hit.z - lastDrop.z, moved = Math.hypot(dx, dz);
     if (moved < 0.12) return;
-    if (moved > 4 || now - lastDrop.t > 400) water.drop(hit.x, hit.z, -0.02);
+    const k = hush(e);
+    if (moved > 4 || now - lastDrop.t > 400) water.drop(hit.x, hit.z, -0.02 * k);
     else {
       const speed = Math.min(1, (moved / Math.max(8, now - lastDrop.t)) * 14), n = Math.min(10, Math.ceil(moved / 0.12));
-      for (let i = 1; i <= n; i++) water.drop(lastDrop.x + (dx * i) / n, lastDrop.z + (dz * i) / n, -(0.005 + 0.007 * speed));
+      for (let i = 1; i <= n; i++) water.drop(lastDrop.x + (dx * i) / n, lastDrop.z + (dz * i) / n, -(0.005 + 0.007 * speed) * k);
     }
     lastDrop.x = hit.x; lastDrop.z = hit.z; lastDrop.t = now;
   }, { passive: true });
-  window.addEventListener("pointerdown", (e) => { if (!calm() && !e.target.closest?.("a, button, input") && toWater(e)) water.drop(hit.x, hit.z, -0.1); }, { passive: true });
+  window.addEventListener("pointerdown", (e) => { if (!calm() && !e.target.closest?.("a, button, input") && toWater(e)) water.drop(hit.x, hit.z, -0.1 * hush(e)); }, { passive: true });
   document.addEventListener("pointerleave", () => { swayT = 0; });
 
   // ── one picture ──
@@ -252,6 +266,7 @@ export function initWorld({ host, how, dom }) {
     // the lotus floats: a slow breath and a sway of a few degrees
     flower.position.y = 0.03 + Math.sin(t * 1.05) * 0.018 + Math.sin(t * 0.63 + 1.3) * 0.008;
     flower.rotation.set(Math.sin(t * 0.8) * 0.012, Math.PI / 8 + Math.sin(t * 0.13) * 0.12, Math.sin(t * 0.57 + 2) * 0.012);
+    flower.userData.pollen(t, !calm()); // the golden specks rising from the heart
     if (art) { cutouts.update(t); swim(t, water.mesh.material.uniforms); }
     if (!calm() && pe < 0.7 && t > nextShed) { for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; water.drop(Math.cos(a) * 0.8, Math.sin(a) * 0.8, 0.016); } nextShed = t + 2.8; }
 
