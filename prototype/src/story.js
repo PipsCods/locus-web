@@ -8,7 +8,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { canvasTexture } from "./lotus.js";
 import { mergeStatic } from "./merge.js";
 
-const HEX = { green: 0x275747, pink: 0xe9a0b6, ivory: 0xf7f3ed };
+const HEX = { green: 0x275747, gold: 0xf0c75a, ivory: 0xf7f3ed }; // gold: the same as "AI" in the headline and the heart of the lotus
 const WORDS = ["Every", "word", "is", "worked", "out", "right", "here."];
 
 // timeline, seconds: unhurried on purpose
@@ -73,7 +73,7 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
     dimm: std(0x1b2a26, 0.8, 0.36),
     clip: std(0x8f9a94, 0.1, 0.55),
     steel: std(0xb9b6ae, 0.9, 0.42),
-    lid: std(0xb4b0a8, 0.9, 0.45, { emissive: HEX.pink, emissiveIntensity: 0 }),
+    lid: std(0xb4b0a8, 0.9, 0.45, { emissive: HEX.gold, emissiveIntensity: 0 }),
     shroud: std(0x131c1a, 0.75, 0.36),
     bezel: std(0x222e2b, 0.8, 0.35),
     blade: std(0x1d2926, 0.6, 0.4),
@@ -84,7 +84,7 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
     off: new THREE.Color(0x0b1513),
     held: new THREE.Color(0x2f7a61).multiplyScalar(1.15),  // memory holding part of the model
     traceIdle: new THREE.Color(HEX.green).multiplyScalar(0.9),
-    hot: new THREE.Color(HEX.pink).multiplyScalar(2.0),     // the model on the move, or a part at work
+    hot: new THREE.Color(HEX.gold).multiplyScalar(1.5),     // the model on the move, or a part at work: pushed past full so it glows, yet stays gold
   };
   M.trace.color.copy(COL.traceIdle);
   M.pulse.color.copy(COL.hot);
@@ -210,7 +210,6 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
 
   // frame: { aspect, bandH, bandV } = the window's shape and the share of it (across, down) the story may fill
   function place(isNarrow, origin, frame) {
-    const aspect = frame.aspect;
     narrow = isNarrow;
     const O = origin;
     if (narrow) { racksG.position.set(O.x - 0.3, AFLOAT, O.z - 9.5); racksG.scale.setScalar(0.86); serverG.position.set(O.x + 0.3, AFLOAT, O.z + 2.4); }
@@ -219,16 +218,20 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
     water.setBoxes([[R.x, R.z, ((RACK_L + 1.4) / 2) * rs, ((RACK.d + 1.6) / 2) * rs], [S.x, S.z, BX + 0.65, BZ + 0.65]]);
     racksG.updateMatrixWorld(true); serverG.updateMatrixWorld(true);
 
-    const fit = Math.max(1, 1.78 / aspect);
+    // Each framing looks from a set angle; how far back it stands and where it aims are worked out so that what it
+    // shows just fits the share of the window the story may fill, whatever the window's shape.
     if (narrow) { // racks behind, board in front: suits a tall or squarish view
-      const k = 2 * Math.tan(THREE.MathUtils.degToRad(20)); // height seen per unit of distance at a 40° view
-      const fitDist = (w, h) => Math.max(h / (k * frame.bandV), w / (k * aspect * frame.bandH)); // far enough to fit both ways
-      Object.assign(rigs.wide, { fov: 40, az: 0.0, el: 0.6, dist: fitDist(14, 18) }); rigs.wide.t.set(O.x, 0.3, O.z - 2.2); // sized generously: the board is nearer the camera than this point, so it looms larger
-      Object.assign(rigs.close, { fov: 40, az: 0.1, el: 0.72, dist: fitDist(10.8, 6.8) }); rigs.close.t.set(S.x, 0.5, S.z);
-    } else {
-      Object.assign(rigs.wide, { fov: 26, az: 0.1, el: 0.4, dist: 35 * fit }); rigs.wide.t.set(O.x - 0.8, 0.2, O.z - 2.4);
-      Object.assign(rigs.close, { fov: 26, az: 0.2, el: 0.52, dist: 20.5 * fit }); rigs.close.t.set(S.x - 0.3, 0.45, S.z - 0.2);
+      Object.assign(rigs.wide, { fov: 40, az: 0.0, el: 0.6, dist: 30 }); rigs.wide.t.set(O.x, 0.3, O.z - 2.2);
+      Object.assign(rigs.close, { fov: 40, az: 0.1, el: 0.72, dist: 16 }); rigs.close.t.set(S.x, 0.5, S.z);
+    } else { // racks to the left and further off, board to the right and nearer: suits a wide view
+      Object.assign(rigs.wide, { fov: 26, az: 0.1, el: 0.4, dist: 35 }); rigs.wide.t.set(O.x - 0.8, 0.2, O.z - 2.4);
+      Object.assign(rigs.close, { fov: 26, az: 0.2, el: 0.52, dist: 20 }); rigs.close.t.set(S.x - 0.3, 0.45, S.z - 0.2);
     }
+    const corners = (group, hx, hy, hz) => [-1, 1].flatMap((sx) => [0, 1].flatMap((sy) => [-1, 1].map((sz) => V(sx * hx, sy * hy, sz * hz).applyMatrix4(group.matrixWorld))));
+    const above = (key, room) => anchors[key][1].clone().setY(anchors[key][1].y + room).applyMatrix4(anchors[key][0].matrixWorld); // a label, with room for its box
+    const boardPts = corners(serverG, BX + 0.65, 1.2, BZ + 0.65);
+    fitRig(rigs.wide, [...corners(racksG, (RACK_L + 1.4) / 2, RACK.y0 + RACK.h + 0.3, (RACK.d + 1.6) / 2), ...boardPts, above("racks", 1.5), above("server", 1.5)], frame);
+    fitRig(rigs.close, [...boardPts, above("ram", 1.0), above("cpu", 1.0), above("gpu", 1.7)], frame);
 
     // routes: off the foot of a rack, a slow meander over the water, aboard at the board's edge, up into a memory cell (or the card)
     journeys = [];
@@ -251,6 +254,23 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
     cardAt = [card[0], card[card.length - 1]];
     motesEnd = Math.max(...journeys.map((j) => j.t0 + j.dur));
     motesShown = true; lastTime = -1; // lay everything out afresh on the next picture
+  }
+
+  // Stand back (or step in) and re-aim until everything in pts just fits inside the frame's bands.
+  function fitRig(rig, pts, frame) {
+    const th = Math.tan(THREE.MathUtils.degToRad(rig.fov / 2)), tw = th * frame.aspect;
+    const ce = Math.cos(rig.el), se = Math.sin(rig.el), ca = Math.cos(rig.az), sa = Math.sin(rig.az);
+    const back = V(sa * ce, se, ca * ce), right = V(ca, 0, -sa), up = V(-sa * se, ce, -ca * se); // the camera stands at t + back * dist
+    for (let pass = 0; pass < 10; pass++) {
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const p of pts) {
+        const d = v.copy(p).sub(rig.t), z = Math.max(0.5, rig.dist - d.dot(back)); // how far in front of the camera
+        const x = d.dot(right) / (z * tw), y = d.dot(up) / (z * th);
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+      rig.t.addScaledVector(right, ((x0 + x1) / 2) * tw * rig.dist).addScaledVector(up, ((y0 + y1) / 2) * th * rig.dist);
+      rig.dist *= Math.max((x1 - x0) / 2 / frame.bandH, (y1 - y0) / 2 / frame.bandV);
+    }
   }
 
   // which memory cells each word uses (a few specialists out of many)
@@ -363,7 +383,7 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
     return near;
   }
 
-  // labels that sit on things in the scene, plus the read-out and the three steps
+  // labels that sit on things in the scene, plus the answer being typed out
   const anchors = {
     ram: [serverG, V(BANK.x0 + ((BANK.n - 1) * BANK.pitch) / 2, Y0 + 1.3, BANK.z - BANK.len / 2 - 0.3)],
     cpu: [serverG, V(CPU.x, Y0 + 0.85, CPU.z - 1.5)],
@@ -378,32 +398,26 @@ export function createStory(scene, water, dom, { wake = 1 } = {}) {
     return { el, key: k, lift: LIFT[k] };
   });
   const setText = (el, s) => { if (el && el.textContent !== s) el.textContent = s; };
-  let labelsShown = true, stepShown = 0;
+  let labelsShown = true;
 
-  function label(camera, W, H, alpha, time) {
-    const near = nearAt(time), parts = ss(0.45, 0.9, near), whole = 1 - ss(0.25, 0.7, near);
+  // top: how far down the window the story's words reach; a label that would run up into them fades out instead
+  function label(camera, W, H, alpha, time, top = 0) {
+    const near = nearAt(time), parts = ss(0.45, 0.9, near), whole = 1 - ss(0.1, 0.5, near);
     const lit = { ram: state.pick > 0.35 || state.moving, cpu: state.cpuOn > 0.35, gpu: state.cardOn > 0.35 };
     if (alpha > 0 || labelsShown) for (const l of labels) { // hidden labels are left alone
       const [group, local] = anchors[l.key];
       v.copy(local).applyMatrix4(group.matrixWorld).project(camera);
       const show = l.key === "racks" || l.key === "server" ? whole : parts;
-      l.el.style.transform = `translate(${((v.x * 0.5 + 0.5) * W).toFixed(1)}px, ${((-v.y * 0.5 + 0.5) * H).toFixed(1)}px) translate(-50%, -100%) translateY(${-l.lift}px)`;
-      l.el.style.opacity = (v.z < 1 ? alpha * show : 0).toFixed(2);
+      const y = (-v.y * 0.5 + 0.5) * H;
+      if (!l.h) l.h = l.el.offsetHeight + 14 + l.lift; // the label's box and the line down to its thing
+      const clear = Math.min(1, Math.max(0, (y - l.h - top) / 16));
+      l.el.style.transform = `translate(${((v.x * 0.5 + 0.5) * W).toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%) translateY(${-l.lift}px)`;
+      l.el.style.opacity = (v.z < 1 ? alpha * show * clear : 0).toFixed(2);
       l.el.classList.toggle("is-on", !!lit[l.key]);
       if (l.key === "racks") l.el.classList.toggle("is-off", state.power < 0.5);
     }
     labelsShown = alpha > 0;
-    const step = time < T_MOVE ? 1 : time < T_WORDS ? 2 : 3;
-    if (step !== stepShown) { stepShown = step; for (const el of dom.steps) el.classList.toggle("is-active", Number(el.dataset.step) === step); }
     const { decoding, u, wi } = state;
-    let now;
-    if (time < T_MOVE) now = "The usual way: the whole model sits on a GPU rack.";
-    else if (time < T_WORDS) now = "locus moves it over: the specialists settle into your server's RAM, a small part onto one card.";
-    else if (!decoding) now = "Done. Nothing left the building.";
-    else if (u < 0.3) now = "Graphics card: reads the request and picks the few specialists this word needs.";
-    else if (u < 0.84) now = "CPU: runs those specialists straight from RAM.";
-    else now = "Graphics card: puts the result together. One more word.";
-    setText(dom.narrate, now);
     const shown = decoding ? wi + (u >= 0.9 ? 1 : 0) : time >= T_DONE ? WORDS.length : 0;
     setText(dom.answer, WORDS.slice(0, shown).join(" "));
   }

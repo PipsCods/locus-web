@@ -31,13 +31,13 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 80px; }
-/* With the pond running, the page comes to rest on the lotus or on the story, never half-way between
-   the two (world.js turns one scroll gesture into the whole move). Inside the story, and from there
-   on down, scrolling is free again. */
+/* With the pond running, the page comes to rest on the lotus or on the story, never half-way between the two: let
+   go before half-way and it settles back, go further or flick and it settles on the other. This is the browser's
+   own scroll snapping; no script takes the wheel over. From the story down, scrolling is free: the margin stretches
+   the story's snapping area to the end of the page, and inside a snapping area taller than the window nothing snaps. */
 html.pond-snap { scroll-snap-type: y mandatory; scroll-padding-top: 64px; }
 html.pond-snap .hero { scroll-snap-align: start; }
-html.pond-snap .how { scroll-snap-align: start; scroll-snap-stop: always; }
-html.pond-snap .footer { scroll-snap-align: end; }
+html.pond-snap .how { scroll-snap-align: start; scroll-snap-stop: always; scroll-margin-bottom: 400vh; }
 body {
   margin: 0;
   background: var(--black);
@@ -78,8 +78,8 @@ p { text-wrap: pretty; }
 /* On devices that struggle, the pond lowers its quality and the page drops its frosted-glass blur with it:
    blurring whatever moves behind a panel is redone for every picture. A more solid panel reads the same. */
 body.pond-lite .nav { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(5, 7, 6, 0.9); }
-body.pond-lite .how__card { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(8, 11, 10, 0.86); }
 body.pond-lite .hero__copy::before { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--black) 72%, transparent); }
+body.pond-lite .how__text::before { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--black) 84%, transparent); }
 .nav__in { display: flex; align-items: center; gap: 28px; height: 64px; }
 .nav__logo { margin-left: -8px; }
 .nav__logo img { height: 42px; width: auto; }
@@ -239,28 +239,8 @@ body.has-pond .lotus { visibility: hidden; } /* the flat logo only shows when th
 .chip::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: var(--lead, 14px); background: var(--green); }
 .panel .pill { position: absolute; top: calc(clamp(16px, 2.6vw, 30px) + 86px); right: clamp(16px, 2.6vw, 30px); opacity: 0; }
 
-.readout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  border-top: 1px solid var(--line);
-}
-.readout p { display: grid; gap: 6px; padding: 18px clamp(16px, 2.4vw, 28px) 20px; min-height: 84px; align-content: start; font-size: 1rem; line-height: 1.4; }
-.readout__answer { border-left: 1px solid var(--line); }
 .caret { display: inline-block; width: 7px; height: 1em; margin-left: 3px; vertical-align: -0.14em; background: var(--pink); animation: led 1s steps(2, end) infinite; }
 
-.steps { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
-.steps li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 14px;
-  padding: 22px clamp(16px, 2.4vw, 28px) 24px;
-  border-left: 1px solid var(--line);
-  color: var(--faint);
-  transition: color 0.5s;
-}
-.steps li:first-child { border-left: 0; }
-.steps strong { font-weight: 500; }
-.steps p { font-size: 0.9375rem; line-height: 1.45; }
 .steps__n {
   display: grid;
   place-items: center;
@@ -271,36 +251,37 @@ body.has-pond .lotus { visibility: hidden; } /* the flat logo only shows when th
   font: 500 0.6875rem/1 var(--mono);
   transition: border-color 0.5s, color 0.5s, background-color 0.5s;
 }
-.steps li.is-active { color: var(--ink); }
-.steps li.is-active .steps__n { border-color: var(--ink); background: var(--ink); color: var(--black); }
 
-/* ── how it works, pinned over the pond ──────────────────────── */
+/* ── how it works, over the pond ─────────────────────────────── */
 
 .how { position: relative; padding-block: clamp(72px, 10vw, 136px); }
-.how__text { display: grid; gap: 18px; max-width: 460px; }
+.how__text { display: grid; gap: 16px; max-width: 460px; }
 .how h2 { font-size: clamp(1.8rem, 3vw, 2.6rem); }
 .how .lead { font-size: 1.0625rem; }
-.how__card { margin-top: 6px; border: 1px solid var(--line); border-radius: 14px; background: rgba(8, 11, 10, 0.64); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); overflow: hidden; }
-.how__card .readout { grid-template-columns: minmax(0, 1fr); border-top: 0; }
-.how__card .readout p { min-height: 0; padding: 14px 18px 15px; font-size: 0.9375rem; }
-.how__card .readout__now { min-height: 6.4em; }
-.how__card .readout__answer { border-left: 0; border-top: 1px solid var(--line); }
-.how__card .steps { grid-template-columns: minmax(0, 1fr); }
-.how__card .steps li { padding: 12px 18px 13px; border-left: 0; border-top: 1px solid var(--line); }
-.how__card .steps li:first-child { border-top: 1px solid var(--line); }
-.how__card .steps p { font-size: 0.875rem; }
+.how__answer { display: none; } /* typed out by the pond's story: without the pond there is nothing to type */
 
-/* with the pond running, the section is tall and its content stays pinned while the story plays */
-body.has-pond .how { height: 240svh; padding-block: 0; }
-body.has-pond .how__pin { position: sticky; top: 64px; height: calc(100svh - 64px); display: flex; align-items: center; }
-body.has-pond .how__pin > .wrap { width: 100%; }
-body.has-pond .how__pin::before { /* darker water behind the words */
+/* With the pond running the section is exactly one window tall, and the page rests on it (world.js). The words lie
+   across the top, straight on the water, and the story plays in the window below them (world.js frames it there).
+   Behind the words the water goes soft and dim with no edge, exactly as it does behind the headline on the lotus,
+   and the cursor barely stirs it. */
+body.has-pond .hero { margin-bottom: 50svh; } /* half a window of open water after the lotus: with it the crossing to the story is about a window and a half of scrolling */
+body.has-pond .how { padding-block: 0; margin-bottom: 30svh; } /* the margin: a stretch of open water before the closing section, so it does not arrive at once */
+body.has-pond .how__pin { position: relative; height: calc(100svh - 64px); }
+body.has-pond .how__top { padding-top: clamp(18px, 3.6vh, 40px); }
+body.has-pond .how__text { position: relative; width: fit-content; max-width: 100%; gap: 10px; }
+body.has-pond .how__text::before {
   content: "";
   position: absolute;
   z-index: -1;
-  inset: 0 48% 0 0;
-  background: linear-gradient(90deg, rgba(5, 7, 6, 0.82), rgba(5, 7, 6, 0));
+  inset: -120px -14vw -64px;
+  background: color-mix(in srgb, var(--black) 70%, transparent); /* a little deeper than behind the headline: the racks pass behind these words when the view closes in on the board */
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  -webkit-mask-image: radial-gradient(closest-side, #000 50%, transparent);
+  mask-image: radial-gradient(closest-side, #000 50%, transparent);
 }
+body.has-pond .how .lead { max-width: 64ch; }
+body.has-pond .how__answer { display: block; min-height: 1.4em; margin-top: 4px; font-size: 1rem; line-height: 1.4; } /* the answer, one word at a time */
 
 .chip--tag { display: grid; gap: 2px; padding: 7px 11px 8px; font: 500 0.875rem/1.25 var(--sans); letter-spacing: -0.01em; text-transform: none; color: var(--ink); }
 .chip--tag b { font: 500 0.625rem/1.2 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
@@ -309,34 +290,27 @@ body.has-pond .how__pin::before { /* darker water behind the words */
 
 /* ── closing + footer ────────────────────────────────────────── */
 
-.closing { border-top: 1px solid var(--line); background: var(--forest); }
+.closing { position: relative; z-index: 5; border-top: 1px solid var(--line); background: var(--forest); } /* above the labels pinned to things in the pond, which it slides up over */
 .closing__in { display: grid; justify-items: start; gap: 22px; padding-block: clamp(64px, 9vw, 112px); }
 .closing .lead { color: rgba(247, 243, 237, 0.7); }
 .closing .label { color: rgba(247, 243, 237, 0.5); }
 
-.footer { background: var(--forest); border-top: 1px solid var(--green); color: rgba(247, 243, 237, 0.6); font-size: 0.875rem; }
+.footer { position: relative; z-index: 5; background: var(--forest); border-top: 1px solid var(--green); color: rgba(247, 243, 237, 0.6); font-size: 0.875rem; }
 .footer__in { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 24px; padding-block: 24px; }
 
 /* ── small screens ───────────────────────────────────────────── */
 
 @media (max-width: 900px) {
   .hero__stage { height: clamp(260px, 44svh, 520px); }
-  body.has-pond .how__pin { align-items: stretch; }
-  body.has-pond .how__pin::before { inset: 0; background: linear-gradient(180deg, rgba(5, 7, 6, 0.78), rgba(5, 7, 6, 0) 26%, rgba(5, 7, 6, 0) 60%, rgba(5, 7, 6, 0.8)); }
-  body.has-pond .how__text { max-width: none; height: 100%; padding-block: 18px 16px; grid-template-rows: auto auto 1fr; align-content: start; gap: 10px; }
-  body.has-pond .how .lead { display: none; }
-  body.has-pond .how__card { align-self: end; }
-  body.has-pond .how__card .steps li:not(.is-active) { display: none; }
-  body.has-pond .how__card .readout__now { min-height: 5em; }
   .nav__wide { display: none; } /* on phones the story is reached by scrolling the home page */
   .nav__in { justify-content: space-between; }
   .section__head { grid-template-columns: minmax(0, 1fr); }
-  .steps { grid-template-columns: minmax(0, 1fr); }
-  .readout { grid-template-columns: minmax(0, 1fr); }
-  .readout__answer { border-left: 0; border-top: 1px solid var(--line); }
-  .readout p { min-height: 0; }
-  .steps li { border-left: 0; border-top: 1px solid var(--line); padding-block: 16px; }
-  .steps li:first-child { border-top: 0; }
+}
+@media (max-width: 700px) {
+  body.has-pond .how .lead { font-size: 1rem; }
+}
+@media (max-width: 360px) {
+  body.has-pond .how__answer { min-height: 2.8em; } /* the answer may run to two lines */
 }
 @media (max-width: 700px) {
   .panel__stage { display: flex; flex-direction: column; }
@@ -367,10 +341,4 @@ body.art-paper {
 body.art-paper .nav { background: rgba(247, 243, 237, 0.8); }
 body.art-paper.pond-lite .nav { background: rgba(247, 243, 237, 0.94); }
 body.art-paper .chip { background: rgba(247, 243, 237, 0.9); }
-body.art-paper .how__card { background: rgba(247, 243, 237, 0.78); }
-body.art-paper.pond-lite .how__card { background: rgba(247, 243, 237, 0.92); }
-body.art-paper.has-pond .how__pin::before { background: linear-gradient(90deg, rgba(247, 243, 237, 0.9), rgba(247, 243, 237, 0)); }
 body.art-paper .tag--server .label, body.art-paper .chip--locus b { color: #b04a78; } /* pink is too pale to read as small text on paper */
-@media (max-width: 900px) {
-  body.art-paper.has-pond .how__pin::before { background: linear-gradient(180deg, rgba(247, 243, 237, 0.86), rgba(247, 243, 237, 0) 26%, rgba(247, 243, 237, 0) 60%, rgba(247, 243, 237, 0.88)); }
-}
