@@ -1,0 +1,135 @@
+NORRVIK INSTRUMENTS AG
+Interim Report, Third Quarter 2026 (1 July to 30 September 2026)
+CONFIDENTIAL - FOR THE BOARD OF DIRECTORS ONLY
+
+[Synthetic sample for the locus demo. Norrvik Instruments, Teklund, Vessmann and every
+figure below are invented. Any resemblance to a real company is accidental.]
+
+
+1. HIGHLIGHTS
+
+- Revenue of EUR 184.6 million, up 7.8% on Q3 2025. Teklund Power Electronics, acquired
+  on 1 July 2026, contributed EUR 19.8 million.
+- Operating profit (EBIT) of EUR 26.1 million (Q3 2025: EUR 25.1 million). It includes a
+  one-off gain of EUR 5.9 million from the sale of the Ostrava building and EUR 3.1 million
+  of acquisition-related costs.
+- Order intake of EUR 172.3 million. Order backlog at 30 September: EUR 402 million.
+- Full-year revenue guidance raised to EUR 720-740 million (was EUR 700-730 million).
+  Adjusted EBIT margin guidance lowered to 13-14% (was 14.5-15.5%).
+
+
+2. CONSOLIDATED INCOME STATEMENT (EUR million, unaudited)
+
+                                           Q3 2026     Q3 2025    9M 2026    9M 2025
+  Revenue                                    184.6       171.2      532.9      509.8
+  Cost of sales                             (118.9)     (106.1)    (338.4)    (316.6)
+  Gross profit                                65.7        65.1      194.5      193.2
+  Research and development                   (14.2)      (12.9)     (40.6)     (38.1)
+  Selling, general and administrative        (31.8)      (27.4)     (89.0)     (81.7)
+  Other operating income                       6.4         0.3        7.1        1.0
+  Operating profit (EBIT)                     26.1        25.1       72.0       74.4
+  Net finance costs                           (4.7)       (2.1)      (9.0)      (6.2)
+  Profit before tax                           21.4        23.0       63.0       68.2
+  Income tax                                  (5.1)       (5.5)     (15.1)     (16.4)
+  Net profit                                  16.3        17.5       47.9       51.8
+
+  Earnings per share (EUR, 42.0 million shares)  0.39    0.42       1.14       1.23
+
+  Adjusted EBIT (excludes the Ostrava gain and acquisition-related costs)
+                                              23.3        25.1       69.2       74.4
+
+
+3. SEGMENTS
+
+                                  Revenue              EBIT
+                              Q3 2026   Q3 2025    Q3 2026   Q3 2025
+  Industrial Sensors            98.4     104.9       15.2      18.6
+  Medical Devices               52.7      49.1        9.8       8.4
+  Energy Systems                33.5      17.2        1.6       1.7
+  Corporate and other              -         -       (0.5)     (3.6)
+  Group                        184.6     171.2       26.1      25.1
+
+Industrial Sensors. Revenue fell 6.2%. Demand from machine builders in Germany and Italy
+stayed weak, and we cut list prices by about 4% on our pressure sensor range to answer
+lower-cost competitors from China. Volumes held up better than prices. The segment's
+largest customer, Vessmann Automotive, accounted for 14% of group revenue in the first
+nine months.
+
+Medical Devices. Revenue grew 7.3% on strong demand for patient-monitoring sensors in
+North America. Production at the Lund plant stopped for nine days in August after a
+ransomware attack on a component supplier; the disruption cost about EUR 1.4 million,
+booked in cost of sales. Margin still improved thanks to a better product mix.
+
+Energy Systems. Includes Teklund from 1 July. Excluding Teklund, segment revenue was
+EUR 13.7 million, down from EUR 17.2 million, as two utility customers postponed grid
+projects into 2027. Teklund's own margin was lower than planned (see risks).
+
+Corporate and other includes the Ostrava gain (EUR +5.9 million), acquisition-related
+costs (EUR -3.1 million) and central costs (EUR -3.3 million; Q3 2025: EUR -3.6 million).
+
+
+4. CASH FLOW AND BALANCE SHEET (EUR million)
+
+                                           30 Sep 2026   31 Dec 2025   30 Sep 2025
+  Cash and cash equivalents                    41.3          88.6          79.4
+  Trade receivables                            96.0          74.2          78.5
+  Inventories                                 121.7          98.9         102.3
+  Gross debt                                  253.7         149.6         152.0
+  Net debt                                    212.4          61.0          72.6
+
+                                              Q3 2026       Q3 2025
+  Cash flow from operating activities           9.8          24.6
+  Capital expenditure                          (8.1)         (7.5)
+  Acquisition of Teklund, net of cash        (146.0)            -
+  Proceeds from sale of Ostrava building        11.2            -
+
+Financing. The Teklund acquisition was funded with cash and a new EUR 80 million bridge
+loan, which matures in June 2027. Our revolving credit facility carries one covenant:
+net debt may not exceed 2.5 times adjusted EBITDA over the last twelve months. Adjusted
+EBITDA for the last twelve months, including Teklund on a pro forma basis, was
+EUR 118.0 million at 30 September.
+
+
+5. OUTLOOK
+
+For the full year 2026 we now expect revenue of EUR 720-740 million and an adjusted EBIT
+margin of 13-14%. The higher revenue range reflects Teklund. The lower margin range
+reflects price pressure in Industrial Sensors, the Teklund margin and a weaker US dollar:
+about 38% of group revenue is invoiced in US dollars, and the dollar was on average 6%
+weaker against the euro than a year ago.
+
+
+6. PRINCIPAL RISKS
+
+a) Customer concentration. Vessmann Automotive told us in September that it will qualify
+   a second supplier for its 2027 vehicle platforms. Vessmann has not said how much
+   volume it will move. Our contract with Vessmann runs to December 2027 with no minimum
+   purchase commitment.
+
+b) Teklund product quality. Shortly after closing we found a firmware defect in about
+   2,400 Teklund inverters already installed at customer sites. A provision of
+   EUR 2.2 million was recorded in the purchase accounting. Our current estimate of the
+   total cost of a field fix ranges from EUR 2 million to EUR 7 million, depending on how
+   many units need a site visit rather than a remote update.
+
+c) Price competition in Industrial Sensors. Further price cuts may be needed in 2027 if
+   competitors keep expanding in Europe. Each 1% of price on the segment's revenue is
+   worth about EUR 4 million a year in EBIT.
+
+d) Working capital and liquidity. Receivables and inventories rose faster than revenue
+   during the quarter, partly because Teklund's customers pay on longer terms. Operating
+   cash flow fell to EUR 9.8 million.
+
+e) Refinancing. The EUR 80 million bridge loan must be refinanced or repaid by June 2027.
+   We plan to replace it with a longer-term loan in the first half of 2027.
+
+f) Supply chain and cyber security. The August incident showed that a single supplier
+   outage can stop a plant. We are qualifying second sources for four critical
+   components and have asked our top 30 suppliers for evidence of their security controls.
+
+g) Currency. A further 5% fall of the US dollar against the euro would reduce annual
+   revenue by about EUR 14 million and EBIT by about EUR 3 million.
+
+
+Approved for distribution to the Board of Directors, 21 October 2026.
+Chief Financial Officer, Norrvik Instruments AG
