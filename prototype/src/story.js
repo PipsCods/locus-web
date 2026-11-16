@@ -11,10 +11,16 @@ import { mergeStatic } from "./merge.js";
 const HEX = { green: 0x275747, gold: 0xf0c75a, ivory: 0xf7f3ed }; // gold: the same as "AI" in the headline and the heart of the lotus
 const WORDS = ["Every", "word", "is", "worked", "out", "right", "here."];
 
-// timeline, seconds: unhurried on purpose
-const T_MOVE = 3.0, T_OFF = 11.6, T_WORDS = 15.2, CYCLE = 2.7;
+// timeline, seconds. The whole story takes about a quarter of a minute, and the first word is out within seven
+// seconds: a visitor gives it a glance, not a sitting.
+//   T_MOVE   the model starts leaving the racks      CROSS   how long one light takes to cross (plus up to CROSS_VAR)
+//   LEAVE    over how long the lights set off         T_OFF   the racks go dark and the view closes in on the board
+//   T_WORDS  the first word starts                    CYCLE   one word
+//   T_DONE   the answer is complete                   LOOP    back to the start (the last RESET seconds undo everything, so the loop has no jump)
+const T_MOVE = 0.6, LEAVE = 1.5, CROSS = 2.3, CROSS_VAR = 0.6, T_OFF = 3.8, T_WORDS = 5.8, CYCLE = 0.85;
 const T_DONE = T_WORDS + CYCLE * WORDS.length;
-export const LOOP = T_DONE + 3;
+const RESET = 1.3;
+export const LOOP = T_DONE + 2.4;
 
 const ss = (a, b, t) => { const x = Math.min(1, Math.max(0, (t - a) / (b - a))); return x * x * (3 - 2 * x); };
 const bump = (a, b, u) => (u <= a || u >= b ? 0 : Math.sin(((u - a) / (b - a)) * Math.PI));
@@ -202,7 +208,7 @@ export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { /
   const motes = new THREE.InstancedMesh(new THREE.SphereGeometry(0.11, 12, 8), M.mote, NMOTE * TRAIL);
   motes.frustumCulled = false; // (drawn only while the model is on its way over: see update)
   scene.add(motes);
-  let journeys = [], cardAt = [T_MOVE + 5, T_MOVE + 8], narrow = false, motesEnd = T_OFF, motesShown = true;
+  let journeys = [], cardAt = [T_MOVE + CROSS, T_MOVE + LEAVE + CROSS], narrow = false, motesEnd = T_OFF, motesShown = true;
   const heldAt = new Float32Array(NCELL);
 
   // two framings: the whole stage (racks, open water, your server), then close on the board
@@ -230,7 +236,7 @@ export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { /
     const corners = (group, hx, hy, hz) => [-1, 1].flatMap((sx) => [0, 1].flatMap((sy) => [-1, 1].map((sz) => V(sx * hx, sy * hy, sz * hz).applyMatrix4(group.matrixWorld))));
     const above = (key, room) => anchors[key][1].clone().setY(anchors[key][1].y + room).applyMatrix4(anchors[key][0].matrixWorld); // a label, with room for its box
     const boardPts = corners(serverG, BX + 0.65, 1.2, BZ + 0.65);
-    fitRig(rigs.wide, [...corners(racksG, (RACK_L + 1.4) / 2, RACK.y0 + RACK.h + 0.3, (RACK.d + 1.6) / 2), ...boardPts, above("racks", 1.5), above("server", 1.5)], frame);
+    fitRig(rigs.wide, [...corners(racksG, (RACK_L + 1.4) / 2, RACK.y0 + RACK.h + 0.3, (RACK.d + 1.6) / 2), ...boardPts, above("racks", 2.4), above("server", 1.5)], frame); // (the racks' label is the topmost thing: room for its whole box, or it fades against the words above)
     fitRig(rigs.close, [...boardPts, above("ram", 1.0), above("cpu", 1.0), above("gpu", 1.7)], frame);
 
     // routes: off the foot of a rack, a slow meander over the water, aboard at the board's edge, up into a memory cell (or the card).
@@ -266,10 +272,10 @@ export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { /
       }
       way = way.filter(([t]) => t > 0.25 && t < L - 0.25).sort((a, b) => a[0] - b[0]);
       const pts = [start, ...way.map((w) => w[1]), edge, edge.clone().lerp(end, 0.5).setY(end.y + 1.0), end];
-      journeys.push({ curve: new THREE.CatmullRomCurve3(pts, false, "centripetal"), t0: T_MOVE + rand(i + 200) * 4.6, dur: 4.6 + rand(i + 220) * 1.6, toCard, last: start.clone(), air: false });
+      journeys.push({ curve: new THREE.CatmullRomCurve3(pts, false, "centripetal"), t0: T_MOVE + rand(i + 200) * LEAVE, dur: CROSS + rand(i + 220) * CROSS_VAR, toCard, last: start.clone(), air: false });
     }
     const arrive = journeys.filter((j) => !j.toCard);
-    for (let c = 0; c < NCELL; c++) { const j = arrive[c % arrive.length]; heldAt[c] = j.t0 + j.dur * 0.97 + rand(c + 300) * 0.7; }
+    for (let c = 0; c < NCELL; c++) { const j = arrive[c % arrive.length]; heldAt[c] = j.t0 + j.dur * 0.97 + rand(c + 300) * 0.4; }
     const card = journeys.filter((j) => j.toCard).map((j) => j.t0 + j.dur).sort((x, y) => x - y);
     cardAt = [card[0], card[card.length - 1]];
     motesEnd = Math.max(...journeys.map((j) => j.t0 + j.dur));
@@ -302,27 +308,31 @@ export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { /
   const state = { power: 1, pick: 0, cpuOn: 0, cardOn: 0, moving: false, decoding: false, wi: -1, u: 0 };
 
   // how close the view should be: 0 = whole stage, 1 = close on the board
-  const nearAt = (time) => ss(T_OFF - 0.6, T_WORDS - 0.4, time) * (1 - ss(T_DONE + 0.5, LOOP - 0.5, time));
+  const nearAt = (time) => ss(T_OFF - 0.4, T_WORDS - 0.2, time) * (1 - ss(T_DONE + 0.9, LOOP - 0.15, time));
+  // the last moments of the loop put everything back as it began: 0 = the story as told, 1 = the start again
+  const undo = (time) => ss(LOOP - RESET, LOOP - 0.15, time);
 
   function update(time, dt = 0) {
     if (time === lastTime && dt === 0) return; // paused: nothing has moved since the last picture
     lastTime = time;
-    const power = 1 - ss(T_OFF, T_OFF + 2.4, time);
+    const back = undo(time);
+    const power = Math.max(1 - ss(T_OFF, T_OFF + 1.6, time), back);
     const decoding = time >= T_WORDS && time < T_DONE;
     const wi = decoding ? Math.floor((time - T_WORDS) / CYCLE) : -1;
     const u = decoding ? ((time - T_WORDS) / CYCLE) % 1 : 0;
     const cardOn = decoding ? Math.max(bump(0, 0.3, u), bump(0.84, 1.0, u)) : 0;
     const pick = decoding ? bump(0.26, 0.74, u) : 0;
     const cpuOn = decoding ? bump(0.4, 0.86, u) : 0;
-    Object.assign(state, { power, pick, cpuOn, cardOn, decoding, wi, u, moving: time > T_MOVE + 4 && time < T_OFF + 1.5 });
+    Object.assign(state, { power, pick, cpuOn, cardOn, decoding, wi, u, moving: time > T_MOVE + CROSS && time < motesEnd });
 
     // the board floats: a slow breath
-    serverG.position.y = AFLOAT + Math.sin(time * 0.85) * 0.014 + Math.sin(time * 0.53 + 1) * 0.006;
-    serverG.rotation.set(Math.sin(time * 0.6) * 0.004, 0, Math.sin(time * 0.47 + 2) * 0.004);
+    const turn = (time / LOOP) * Math.PI * 2; // once round per loop: everything that sways is built from it, so the loop joins up
+    serverG.position.y = AFLOAT + Math.sin(turn * 2) * 0.014 + Math.sin(turn + 1) * 0.006;
+    serverG.rotation.set(Math.sin(turn * 2 + 0.5) * 0.004, 0, Math.sin(turn + 2) * 0.004);
     serverG.updateMatrixWorld(true);
 
     // racks
-    M.rackFront.emissiveIntensity = power * (3.0 + 0.5 * Math.sin(time * 7));
+    M.rackFront.emissiveIntensity = power * (3.0 + 0.5 * Math.sin(turn * 16));
     M.rackFront.color.setScalar(0.45 + 0.55 * power);
     M.rackFrame.color.copy(rackBase.frame).multiplyScalar(0.5 + 0.5 * power);
     M.rackSide.color.copy(rackBase.side).multiplyScalar(0.5 + 0.5 * power);
@@ -346,7 +356,7 @@ export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { /
           if (pk.position.y > 0.22) j.air = true; // in the air: leaping a leaf, or climbing aboard
           else if (pk.position.y < 0.14) {
             if (j.air) { water.drop(pk.position.x, pk.position.z, -0.04 * wake); j.last.copy(pk.position); j.air = false; } // down from a leap: a splash
-            else if (Math.hypot(pk.position.x - j.last.x, pk.position.z - j.last.z) > 0.24) { water.drop(pk.position.x, pk.position.z, -0.014 * wake); j.last.copy(pk.position); } // its wake
+            else if (Math.hypot(pk.position.x - j.last.x, pk.position.z - j.last.z) > 0.5) { water.drop(pk.position.x, pk.position.z, -0.02 * wake); j.last.copy(pk.position); } // its wake (spaced out: the water takes only so many drops a second)
           }
         }
       }
@@ -356,12 +366,12 @@ export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { /
     motesShown = motes.visible = drifting;
 
     // memory cells
-    for (let c = 0; c < NCELL; c++) { col.copy(COL.off).lerp(COL.held, ss(heldAt[c], heldAt[c] + 0.5, time)); cells.setColorAt(c, col); }
+    for (let c = 0; c < NCELL; c++) { col.copy(COL.off).lerp(COL.held, ss(heldAt[c], heldAt[c] + 0.4, time) * (1 - back)); cells.setColorAt(c, col); }
     if (wi >= 0) for (const c of picks[wi]) { col.copy(COL.held).lerp(COL.hot, pick); cells.setColorAt(c, col); }
     cells.instanceColor.needsUpdate = true;
 
     // processor + card
-    const cardLoaded = ss(cardAt[0], cardAt[1], time), loaded = ss(T_MOVE + 4, T_WORDS - 1.5, time);
+    const cardLoaded = ss(cardAt[0], cardAt[1], time) * (1 - back), loaded = ss(T_MOVE + CROSS, T_WORDS - 0.5, time) * (1 - back);
     M.lid.emissiveIntensity = cpuOn * 0.6;
     M.ring.color.copy(COL.off).lerp(COL.traceIdle, loaded).lerp(COL.hot, cpuOn);
     M.strip.color.copy(COL.off).lerp(COL.held, cardLoaded).lerp(COL.hot, cardOn);
@@ -389,12 +399,10 @@ export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { /
     packets.visible = n > 0;
     if (n > 0) packets.instanceMatrix.needsUpdate = true;
 
-    // each stage of a word sends one soft ring out from the board
+    // each word, as it comes out, sends one soft ring out from the board
     if (dt > 0 && decoding) {
       const crossed = (m) => (wi !== prevWi ? u >= m : prevU < m && u >= m);
-      if (crossed(0.04)) ring(BX + 1.0, 0.4, 0.03);
-      if (crossed(0.46)) ring(0.6, BZ + 1.0, 0.026);
-      if (crossed(0.88)) ring(BX + 1.0, -0.4, 0.03);
+      if (crossed(0.88)) ring(wi % 2 ? 0.6 : BX + 1.0, wi % 2 ? BZ + 1.0 : 0.4, 0.03);
     }
     prevU = u; prevWi = wi;
   }
@@ -402,7 +410,7 @@ export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { /
   // camera framing for this moment of the story
   function rig(time, out) {
     const near = nearAt(time), A = rigs.wide, B = rigs.close, mix = (x, y) => x + (y - x) * near;
-    out.fov = mix(A.fov, B.fov); out.az = mix(A.az, B.az) + Math.sin(time * 0.11) * 0.02; out.el = mix(A.el, B.el); out.dist = mix(A.dist, B.dist);
+    out.fov = mix(A.fov, B.fov); out.az = mix(A.az, B.az) + Math.sin((time / LOOP) * Math.PI * 2) * 0.02; out.el = mix(A.el, B.el); out.dist = mix(A.dist, B.dist);
     out.target.lerpVectors(A.t, B.t, near);
     return near;
   }
@@ -442,7 +450,7 @@ export function createStory(scene, water, dom, { wake = 1, pads = [] } = {}) { /
     }
     labelsShown = alpha > 0;
     const { decoding, u, wi } = state;
-    const shown = decoding ? wi + (u >= 0.9 ? 1 : 0) : time >= T_DONE ? WORDS.length : 0;
+    const shown = decoding ? wi + (u >= 0.9 ? 1 : 0) : time >= T_DONE && undo(time) < 0.5 ? WORDS.length : 0;
     setText(dom.answer, WORDS.slice(0, shown).join(" "));
   }
 
