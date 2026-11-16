@@ -1,5 +1,5 @@
 // The pond (three.js) is loaded after the page text is up. Without WebGL the page still reads:
-// flat logo in the hero, and "How it works" as plain text and steps.
+// flat logo in the hero, and "How it works" as its title and one line of text.
 // ?art=ink / ?art=paper: the illustrated versions of the pond (see art.js). The page takes its colours from the class set here.
 const art = new URLSearchParams(location.search).get("art");
 if (art !== null) {
@@ -15,8 +15,6 @@ if (host && how) {
       how,
       dom: {
         labels: document.querySelectorAll(".pond-labels [data-anchor]"),
-        steps: how.querySelectorAll("[data-step]"),
-        narrate: how.querySelector("[data-narrate]"),
         answer: how.querySelector("[data-answer]"),
       },
     });

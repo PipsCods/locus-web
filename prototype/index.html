@@ -49,21 +49,12 @@
   <!-- ── scene: a GPU rack becomes one server ──── -->
 <section class="how" id="how">
     <div class="how__pin">
-      <div class="wrap">
-        <div class="how__text">
-          <span class="label">How it works</span>
-          <h2>One server does the work <span class="dim">of a GPU rack.</span></h2>
-          <p class="lead">A top AI model is made of many small specialists, and each word needs only a few of them. So locus keeps them in your server's RAM and shares the work between your CPU and one graphics card.</p>
-          <div class="how__card">
-            <div class="readout">
-              <p class="readout__now"><span class="label">Now</span><span data-narrate></span></p>
-              <p class="readout__answer"><span class="label">Answer</span><span><span data-answer></span><span class="caret"></span></span></p>
-            </div>
-            <ol class="steps">
-              <li data-step="1"><span class="steps__n">1</span><p><strong>The usual way.</strong> The whole model sits on a GPU rack.</p></li>
-              <li data-step="2"><span class="steps__n">2</span><p><strong>locus splits it.</strong> The specialists move into your server's RAM. A small part goes on one card.</p></li>
-              <li data-step="3"><span class="steps__n">3</span><p><strong>Every word is shared work.</strong> The card reads the request. Your CPU runs the few specialists needed, straight from RAM.</p></li>
-            </ol>
+      <div class="how__top">
+        <div class="wrap">
+          <div class="how__text">
+            <h2>One server does the work <span class="dim">of a GPU rack.</span></h2>
+            <p class="lead">locus stores the model weights in your server's RAM and shares the work between your CPU and one additional graphics card.</p>
+            <p class="how__answer" aria-hidden="true"><span data-answer></span><span class="caret"></span></p>
           </div>
         </div>
       </div>

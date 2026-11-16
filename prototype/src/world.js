@@ -17,6 +17,7 @@ import { createFinish } from "./finish.js";
 import { artStyle, paintify, addCutouts, swim } from "./art.js";
 
 const PAGE = 0x050706;
+const navH = 64; // height of the bar across the top of the page
 const STAGE = new THREE.Vector3(30, 0, -4); // where the "how it works" story stands, across the water from the lotus
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const clamp = (x) => Math.min(1, Math.max(0, x));
@@ -109,12 +110,13 @@ export function initWorld({ host, how, dom }) {
   // Floating leaves, as three fixed clusters (round the lotus, along the way, round the story): one mesh each.
   const padMat = new THREE.MeshStandardMaterial({ name: "pad", map: padTexture(), roughness: 0.78, metalness: 0, envMapIntensity: 0.3, side: THREE.DoubleSide });
   const m4 = new THREE.Matrix4();
-  const padCluster = (list) => scene.add(new THREE.Mesh(mergeGeometries(list.map(([x, z, r, turn]) => padGeometry(r).applyMatrix4(m4.makeRotationY(turn).setPosition(x, 0.022, z)))), padMat));
+  const pads = []; // every leaf as [x, z, radius]: the story's lights keep clear of them
+  const padCluster = (list) => { pads.push(...list); scene.add(new THREE.Mesh(mergeGeometries(list.map(([x, z, r, turn]) => padGeometry(r).applyMatrix4(m4.makeRotationY(turn).setPosition(x, 0.022, z)))), padMat)); };
   padCluster([[-2.7, -1.0, 1.55, 0.5], [2.6, -1.8, 1.35, 2.3], [-0.5, -3.4, 1.7, 4.1], [4.3, 0.5, 1.15, 3.3], [-4.6, 0.9, 1.25, 5.6], [1.9, 1.7, 0.62, 1.2]]);
   padCluster([[8.5, 2.6, 1.2, 0.9], [11.5, -4.2, 1.6, 2.7], [15.5, 1.6, 0.9, 4.4], [18.0, -6.4, 1.3, 1.8], [21.5, 4.4, 1.5, 3.6], [6.2, -6.0, 1.0, 5.1]]); // they slide past as the view crosses the water
   padCluster([[-5.2, -3.4, 1.5], [5.6, -4.4, 1.15], [-5.6, 6.4, 0.9], [6.1, 7.2, 1.7], [0.2, 9.4, 1.25]].map(([x, z, r], i) => [STAGE.x + x, STAGE.z + z, r, i * 1.3 + 0.4]));
 
-  const story = createStory(scene, water, dom, { wake: art ? art.wake : 1 });
+  const story = createStory(scene, water, dom, { wake: art ? art.wake : 1, pads });
   let cutouts = null;
   if (art) {
     paintify(scene, art);
@@ -140,7 +142,9 @@ export function initWorld({ host, how, dom }) {
   }
 
   // ── sizing ──
-  let W = 1, H = 1, narrow = null, heroDist = 10.5;
+  // The story's words lie across the top of the window (style.css); the story is framed in the window left below them.
+  const copy = how.querySelector(".how__text"), pin = how.querySelector(".how__pin");
+  let W = 1, H = 1, heroDist = 10.5, under = 0; // under: how far down the window the story's words reach
   const buf = new THREE.Vector2();
   function resize() {
     W = Math.max(1, host.clientWidth); H = Math.max(1, host.clientHeight);
@@ -149,60 +153,49 @@ export function initWorld({ host, how, dom }) {
     renderer.getDrawingBufferSize(buf);
     finish.setSize(buf.x, buf.y);
     water.setMirrorSize(buf.x * q.mirror, buf.y * q.mirror);
-    camera.aspect = W / H;
-    heroDist = Math.max(10.5, 2.3 / (Math.tan(THREE.MathUtils.degToRad(14)) * camera.aspect)); // keep the whole flower in frame
-    narrow = camera.aspect < 1.05;
-    // The story is always staged in depth (racks behind, board in front): on wide screens it shares the
-    // window with its text column, on narrow ones with the text above and below, so its own area is squarish.
-    story.place(true, STAGE, { aspect: camera.aspect, bandH: narrow ? 0.94 : 0.56, bandV: narrow ? 0.42 : 0.84 });
+    heroDist = Math.max(10.5, 2.3 / (Math.tan(THREE.MathUtils.degToRad(14)) * (W / H))); // keep the whole flower in frame
+    under = copy && pin ? Math.min(H * 0.6, navH + Math.max(0, copy.getBoundingClientRect().bottom - pin.getBoundingClientRect().top) + 18) : 0;
+    const aspect = W / (H - under); // the shape of the window the story plays in
+    // A squarish or upright window has the racks behind and the board in front; a wide one has them side by side.
+    const deep = aspect < 1.3;
+    story.place(deep, STAGE, { aspect, bandH: deep ? 0.88 : 0.92, bandV: deep ? 0.8 : 0.86 });
     dirty = true;
   }
   let dirty = true, lastScroll = -1e9;
   setLevel(start.level);
-  new ResizeObserver(resize).observe(host);
+  const sized = new ResizeObserver(resize);
+  sized.observe(host);
+  if (copy) { sized.observe(copy); sized.observe(how); } // the words' height changes as the font loads and they wrap
   resize();
   window.addEventListener("scroll", () => { lastScroll = performance.now(); dirty = true; }, { passive: true });
 
   // ── how far the visitor has scrolled from the lotus (0) to "How it works" (1) ──
-  const navH = 64;
+  // All the scrolling is the browser's own; nothing here takes the wheel over, so nothing can hold it up. The
+  // stylesheet makes the page settle on the lotus or on the story and never between them (scroll snapping), makes
+  // the crossing a good scroll long, and leaves everything from the story down free.
+  const first = how.previousElementSibling; // the lotus section
+  const storyTop = () => how.offsetTop - navH; // the scroll position at which the story is in place
+  const lotusTop = () => Math.max(0, first ? first.offsetTop - navH : 0);
   let forced = null;
-  function travel(top) {
+  function travel(top) { // top: where the story section's top edge is in the window
     if (forced !== null) return forced;
-    const from = window.innerHeight * 0.94, to = navH + 4;
-    return clamp((from - top) / (from - to));
+    const span = Math.max(1, storyTop() - lotusTop()), done = span - (top - navH); // the whole crossing, and how much of it is behind
+    return clamp((done - 0.06 * span) / (0.94 * span - 4));
   }
 
-  // ── one move between the lotus and the story ──
-  // The stylesheet already stops the page from resting between the two (scroll snapping). This makes
-  // the direction decide: any scroll down from the lotus goes to the story, and a fresh scroll up from
-  // the top of the story goes back, as one continuous move.
-  const storyTop = () => how.offsetTop - navH; // the scroll position at which the story is in place
-  let flightEnd = 0, lastWheel = 0, swallow = false;
-  function fly(to) {
-    flightEnd = performance.now() + 900;
-    swallow = true; // the rest of this gesture (a trackpad keeps sending for a second) must not scroll on
-    window.scrollTo({ top: to, behavior: reduce ? "auto" : "smooth" });
-  }
-  window.addEventListener("wheel", (e) => {
-    if (e.ctrlKey) return; // pinch-zoom
-    const now = performance.now(), fresh = now - lastWheel > 160, y = window.scrollY, top = storyTop();
-    lastWheel = now;
-    if (now < flightEnd) { e.preventDefault(); return; }
-    if (swallow) { if (!fresh) { e.preventDefault(); return; } swallow = false; }
-    const dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? window.innerHeight : 1); // in pixels
-    if (dy > 0 && y < top - 1) { e.preventDefault(); fly(top); }
-    else if (dy < 0 && y > 1 && y <= top + 1) { e.preventDefault(); if (fresh) fly(0); }            // at the story's top: only a new gesture leaves it
-    else if (dy < 0 && y > top + 1 && y + dy < top) { e.preventDefault(); window.scrollTo({ top, behavior: "instant" }); } // scrolling up through the story stops at its top
-  }, { passive: false });
+  // Arrow keys move a page too little to cross by themselves (it would only settle back), so the keys that mean
+  // "next" and "back" ask the browser to scroll the whole way. From the story down they scroll as they always do.
   window.addEventListener("keydown", (e) => {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
     const space = e.key === " " && !e.target.closest?.("a, button");
     const down = e.key === "ArrowDown" || e.key === "PageDown" || (space && !e.shiftKey);
     const up = e.key === "ArrowUp" || e.key === "PageUp" || (space && e.shiftKey);
-    const y = window.scrollY, top = storyTop();
-    if (down && y < top - 1) { e.preventDefault(); fly(top); }
-    else if (up && y > 1 && y <= top + 1) { e.preventDefault(); fly(0); }
+    if (!down && !up) return;
+    const y = window.scrollY, lotus = lotusTop(), top = storyTop();
+    if (y > top + 1.5 || (down && y > top - 1.5) || (up && y <= lotus + 1.5)) return;
+    e.preventDefault();
+    window.scrollTo({ top: down ? top : lotus, behavior: reduce ? "auto" : "smooth" });
   });
 
   // ── cursor → ripples, anywhere on the page ──
@@ -214,14 +207,23 @@ export function initWorld({ host, how, dom }) {
   // barely stirs it. The quiet zone follows the soft veil behind the words (style.css, .hero__copy::before):
   // 130px above, 110px below, 16vw to each side, an ellipse that is full up to half way and fades out to its edge.
   const words = document.querySelector(".hero__copy");
+  // The story's words get the same quiet: everything from the top of the window down to their last line, easing
+  // back to full over the soft lower edge of the dim water behind them (style.css, .how__text::before).
   const QUIET = 0.2; // how much of the stir is left right behind the words
   function hush(e) {
-    if (!words) return 1;
-    const r = words.getBoundingClientRect(), side = 0.16 * window.innerWidth;
-    const w = r.width + 2 * side, h = r.height + 240, cx = r.left - side + w / 2, cy = r.top - 130 + h / 2;
-    const d = Math.hypot((e.clientX - cx) / (w / 2), (e.clientY - cy) / (h / 2));
-    const behind = 1 - Math.min(1, Math.max(0, (d - 0.5) / 0.5)); // 1 right behind the words, 0 past the veil's edge
-    return 1 - behind * (1 - QUIET);
+    let k = 1;
+    if (words) {
+      const r = words.getBoundingClientRect(), side = 0.16 * window.innerWidth;
+      const w = r.width + 2 * side, h = r.height + 240, cx = r.left - side + w / 2, cy = r.top - 130 + h / 2;
+      const d = Math.hypot((e.clientX - cx) / (w / 2), (e.clientY - cy) / (h / 2));
+      const behind = 1 - Math.min(1, Math.max(0, (d - 0.5) / 0.5)); // 1 right behind the words, 0 past the veil's edge
+      k = 1 - behind * (1 - QUIET);
+    }
+    if (copy) {
+      const r = copy.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < H) k *= QUIET + (1 - QUIET) * clamp((e.clientY - r.bottom) / 64);
+    }
+    return k;
   }
   function toWater(e) {
     ptr.set((e.clientX / W) * 2 - 1, -((e.clientY / H) * 2 - 1));
@@ -241,7 +243,7 @@ export function initWorld({ host, how, dom }) {
     }
     lastDrop.x = hit.x; lastDrop.z = hit.z; lastDrop.t = now;
   }, { passive: true });
-  window.addEventListener("pointerdown", (e) => { if (!calm() && !e.target.closest?.("a, button, input") && toWater(e)) water.drop(hit.x, hit.z, -0.1 * hush(e)); }, { passive: true });
+  window.addEventListener("pointerdown", (e) => { if (!calm() && !e.target.closest?.("a, button, input") && toWater(e)) water.drop(hit.x, hit.z, -0.07 * hush(e)); }, { passive: true }); // a pebble: its ring is lit all the way round now, so it needs less force to show
   document.addEventListener("pointerleave", () => { swayT = 0; });
 
   // ── one picture ──
@@ -284,9 +286,11 @@ export function initWorld({ host, how, dom }) {
     const dist = mix(heroRig.dist, storyRig.dist, pe);
     target.lerpVectors(heroRig.target, storyRig.target, pe);
     camera.fov = fov;
-    // on wide screens the story sits to the right of its text; on narrow ones a little above centre
-    const offX = narrow ? 0 : W * 0.21 * pe, offY = narrow ? -H * 0.05 * pe : H * 0.02 * pe;
-    camera.setViewOffset(W, H, -offX, -offY, W, H);
+    // the story plays in the window below its words: the view's frame slides down to there as the page scrolls.
+    // Scrolling on past the story carries the picture up with the page, so the closing section slides over water, not over a gap.
+    const cut = under * pe, past = forced === null ? Math.max(0, navH - top) : 0;
+    camera.aspect = W / (H - cut);
+    camera.setViewOffset(W, H - cut, 0, past - cut, W, H);
     camera.position.set(target.x + dist * Math.sin(az) * Math.cos(el), target.y + dist * Math.sin(el), target.z + dist * Math.cos(az) * Math.cos(el));
     camera.lookAt(target);
     camera.updateMatrixWorld();
@@ -311,7 +315,7 @@ export function initWorld({ host, how, dom }) {
     if (!calm()) water.advance(dt);
     water.update(t, camera);
     finish.render(scene, camera);
-    if (!quiet) story.label(camera, W, H, smooth((p - 0.7) / 0.3), st);
+    if (!quiet) story.label(camera, W, H, smooth((p - 0.7) / 0.3), st, cut - past);
 
     if (fade < 1 && !quiet) { // the pond fades in once, then the canvas is left alone
       fade = Math.min(1, (now - t0) / 1400);
@@ -371,7 +375,7 @@ export function initWorld({ host, how, dom }) {
     // a calm scene needs no more than 60 pictures a second; faster screens get every picture only while the page is scrolling
     if (now - last < 10.5 && performance.now() - lastScroll > 160) return;
     const rect = how.getBoundingClientRect();
-    if (rect.bottom < -40) { last = now; return; }                    // scrolled past: the closing section hides the pond
+    if ((how.nextElementSibling?.getBoundingClientRect().top ?? rect.bottom) < -40) { last = now; return; } // scrolled past: the closing section hides the pond
     if (calm() && !dirty && fade >= 1) { last = now; return; }        // nothing moves: keep the last picture
     dirty = false;
     const dt = Math.min(0.05, (now - last) / 1000);

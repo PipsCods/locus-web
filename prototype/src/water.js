@@ -153,8 +153,13 @@ export function createWater(renderer, opts = {}) {
         vec3 sky = mix(vec3(0.012, 0.046, 0.037), vec3(0.0, 0.004, 0.003), pow(clamp(rdir.y, 0.0, 1.0), 0.5));
         vec3 col = color + sky * (0.35 + 0.65 * fres) + mirror * (0.5 + 0.45 * fres) * uMirror;
         float r = length(vPos.xz);
-        float lit = clamp(-dot(raw, normalize(uLight.xz)) * 2.4, 0.0, 0.3) + clamp(length(raw) * 0.6, 0.0, 0.08);
-        col += mix(vec3(0.14, 0.32, 0.28), vec3(0.85, 0.5, 0.62), exp(-r * 0.22)) * lit; // rings catch the back light
+        // Rings catch the back light: the whole slope a little, the side facing the light most, levelling off softly on
+        // tall waves. Lit on the facing side only, a ring showed as two flat streaks and a fresh drop as a bright bar
+        // under a dark one, with a hard line between them.
+        float steep = length(raw);
+        float facing = steep > 1e-5 ? -dot(raw, normalize(uLight.xz)) / steep : 0.0;
+        float lit = 0.3 * (1.0 - exp(-steep * (1.15 + 0.75 * facing) / 0.3));
+        col += mix(vec3(0.14, 0.32, 0.28), vec3(0.85, 0.5, 0.62), exp(-r * 0.22)) * lit;
         gl_FragColor = vec4(col, alpha);
       }`,
   };
