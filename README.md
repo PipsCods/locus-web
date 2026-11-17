@@ -1,8 +1,8 @@
 # locus website
 
-The website for locus: a landing page with a 3D lotus pond, and a "Check your server" page that estimates which AI model a company's server could run.
+The website for locus: a landing page with a 3D lotus pond, a "Check your server" page that estimates which AI model a company's server could run, and a live demo on a real rented server.
 
-Live at https://locus-770.pages.dev
+Live at https://locus-ai.tech
 
 ## Folders
 
@@ -10,6 +10,7 @@ Live at https://locus-770.pages.dev
 |---|---|
 | `prototype/` | The website. Everything below happens here. |
 | `brand/` | Logo files and the scripts that made them. |
+| `demo/` | The live demo's backend (a Cloudflare Worker) and the scripts for the rented GPU machine. See [`demo/README.md`](demo/README.md). |
 | `mockups/` | Early static page designs. Not part of the live site. |
 
 ## Run it on your computer
@@ -36,6 +37,9 @@ Open http://localhost:5173. The page reloads when you save a file.
 | `src/check-data.js` | Servers, graphics cards, models and prices offered on that page |
 | `src/estimate.js` | The formula behind the estimate |
 | `functions/api/lead.js` | Saves the email when someone asks for an estimate |
+| `demo.html`, `src/demo.js`, `src/demo.css` | The live demo page: request form, progress, chat |
+| `functions/api/demo/[[path]].js` | Passes `/api/demo/*` on to the demo Worker in `demo/worker/` |
+| `dev/demo-api.js` | A pretend demo backend for `npm run dev`, so the page works with no Worker |
 
 Prices and models in `check-data.js` are from November 2026. Review them before relying on them again.
 
@@ -48,6 +52,7 @@ Prices and models in `check-data.js` are from November 2026. Review them before 
 | `/?art=paper` | Pond drawn as a watercolour on light paper |
 | `/?q=0` to `/?q=4` | Fix the 3D quality level (0 is best, 4 is lightest) |
 | `/lotus.html` | The lotus alone, for working on it |
+| `/demo?demo=ready` | The demo chat, against the pretend backend (dev only; the bar under the footer switches between the other states) |
 
 When you test the form locally, emails are saved in `prototype/.leads.dev.jsonl`. Git ignores this file.
 
