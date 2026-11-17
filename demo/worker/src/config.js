@@ -12,7 +12,7 @@ export function config(env) {
   const windowMinutes = num(env.DEMO_WINDOW_MINUTES, 120);
   const bootTimeoutMinutes = num(env.BOOT_TIMEOUT_MINUTES, 45);
   return {
-    siteUrl: str(env.SITE_URL, "https://locus-770.pages.dev").replace(/\/$/, ""),
+    siteUrl: str(env.SITE_URL, "https://locus-ai.tech").replace(/\/$/, ""),
     secret: str(env.SIGNING_SECRET),
     ownerEmail: str(env.OWNER_EMAIL),
     emailFrom: str(env.EMAIL_FROM, "locus <demo@example.com>"),

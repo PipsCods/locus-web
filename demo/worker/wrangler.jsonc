@@ -36,7 +36,7 @@
 	"triggers": { "crons": ["*/5 * * * *"] },
 
 	"vars": {
-		"SITE_URL": "https://locus-770.pages.dev",
+		"SITE_URL": "https://locus-ai.tech",
 		"OWNER_EMAIL": "",
 		"EMAIL_FROM": "locus <demo@YOUR-DOMAIN>",
 

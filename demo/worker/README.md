@@ -102,7 +102,7 @@ export const onRequest = ({ request, env }) => env.DEMO.fetch(request);
 
 | Name | Default | Meaning |
 |---|---|---|
-| `SITE_URL` | `https://locus-770.pages.dev` | base of links in emails |
+| `SITE_URL` | `https://locus-ai.tech` | base of links in emails |
 | `OWNER_EMAIL` | | receives review and failure emails |
 | `EMAIL_FROM` | | sender, on the Resend-verified domain |
 | `CAP_*`, `QUEUE_MAX_HOURS` | see above | spend caps; queued demos expire after `QUEUE_MAX_HOURS` |
