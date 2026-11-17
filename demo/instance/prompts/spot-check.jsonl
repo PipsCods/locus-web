@@ -1,0 +1,5 @@
+{"id": "report-risks", "prompt": "Here is a quarterly report.\n\n<report>\n{{REPORT}}\n</report>\n\nSummarize the five most important risks for the board, most serious first. One or two sentences each, with the numbers that matter."}
+{"id": "report-kpis", "prompt": "Here is a quarterly report.\n\n<report>\n{{REPORT}}\n</report>\n\nExtract the key financial KPIs into a markdown table with columns: KPI, Q3 FY2026, Q3 FY2025, change. Use only figures stated in the report; write n/a where a value is not given."}
+{"id": "report-board-note", "prompt": "Here is a quarterly report.\n\n<report>\n{{REPORT}}\n</report>\n\nDraft a short note (under 200 words) from the CFO to the board explaining why the EBITDA margin guidance was lowered and what management is doing about it."}
+{"id": "report-arith", "prompt": "Here is a quarterly report.\n\n<report>\n{{REPORT}}\n</report>\n\nCheck the arithmetic: do the three segment revenues add up to group revenue? Show the calculation."}
+{"id": "general-explain", "prompt": "Explain to a non-technical CFO, in about 120 words, why running a language model on the company's own servers can matter for confidential documents."}

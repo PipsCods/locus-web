@@ -1,0 +1,22 @@
+# Copy to .dev.vars for `npm run dev` (wrangler dev). .dev.vars is git-ignored.
+#
+# DEV_FAKES=1 replaces Turnstile, Resend, OpenAI, Vast, the Cloudflare API and all outside fetches
+# (DNS-over-HTTPS, RDAP, homepages, the machine) with the in-memory fakes in src/fakes.js.
+# Emails are printed to the wrangler log instead of being sent. The Worker refuses to serve
+# requests with DEV_FAKES=1 on any hostname other than localhost/127.0.0.1.
+DEV_FAKES=1
+SIGNING_SECRET=dev-secret-dev-secret-dev-secret-0000
+SITE_URL=http://localhost:8787
+OWNER_EMAIL=owner@example.com
+DEMO_DOMAIN=demo.example.com
+VAST_IMAGE=example/locus-demo:dev
+# a short window so the teardown is visible locally
+DEMO_WINDOW_MINUTES=2
+HEALTH_POLL_SECONDS=5
+
+# manual mode against the fake machine (any URL is answered by the fake when DEV_FAKES=1)
+MANUAL_UPSTREAM_URL=https://manual-box.example
+MANUAL_UPSTREAM_KEY=dev-box-key
+MANUAL_ACCESS_KEY=dev-access-key-0123456789
+MANUAL_HW_CPU=AMD EPYC 9654
+MANUAL_HW_RAM_GB=256

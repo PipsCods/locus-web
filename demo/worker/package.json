@@ -1,0 +1,20 @@
+{
+  "name": "locus-demo-worker",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "check": "wrangler deploy --dry-run --outdir dist",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply locus-leads --remote",
+    "db:migrate:local": "wrangler d1 migrations apply locus-leads --local",
+    "lists:update": "node scripts/update-blocklists.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.8.3",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.163.0"
+  }
+}

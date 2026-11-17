@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Try it live — locus</title>
+  <meta name="description" content="Use a large AI model running on one server with one graphics card. Ask it anything, or let it read a sample financial report.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/src/style.css">
+  <link rel="stylesheet" href="/src/check.css">
+  <link rel="stylesheet" href="/src/demo.css">
+</head>
+<body class="check-page demo-page">
+
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__logo" href="/" aria-label="locus, home"><img src="/locus-wordmark.svg" alt="locus" width="511" height="162"></a>
+    <nav class="nav__links" aria-label="Main">
+      <a class="nav__live" href="/demo" aria-current="page">Try it live</a>
+      <a class="nav__cta" href="/check">Check your server</a>
+    </nav>
+  </div>
+</header>
+
+<!-- one page, several states: demo.js asks /api/demo/status and shows the matching section -->
+<main class="check demo" id="top">
+  <div class="wrap">
+
+    <section class="demo__view" data-view="loading" aria-busy="true">
+      <header class="check__head">
+        <p class="label">Try it live</p>
+        <h1>One moment…</h1>
+      </header>
+    </section>
+
+    <!-- status "none": ask for a demo -->
+    <section class="demo__view" data-view="request" hidden>
+      <header class="check__head">
+        <p class="label">Try it live</p>
+        <h1>Use it on a real server.</h1>
+        <p class="lead">We start a server with one graphics card, just for you, running a large AI model. You get it for two hours. Getting it ready takes about half an hour, and we email you when it is.</p>
+      </header>
+
+      <form class="check__form" id="request-form" novalidate>
+        <fieldset class="step">
+          <legend><span class="steps__n">1</span>Your work email</legend>
+          <p class="step__hint">Each server costs us real money, so we check every request first. Please use your company address.</p>
+          <div class="field">
+            <label class="sr" for="email">Work email</label>
+            <input type="email" id="email" name="email" autocomplete="email" inputmode="email" placeholder="name@company.com" required aria-describedby="email-error">
+            <p class="field__error" id="email-error" role="alert" hidden></p>
+          </div>
+          <!-- people never see this field; scripts that fill in everything give themselves away -->
+          <input class="hp" type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <!-- Cloudflare's check that a person is asking; it is usually invisible -->
+          <div class="demo__turnstile" data-turnstile></div>
+        </fieldset>
+
+        <div class="check__go">
+          <button class="btn" type="submit" data-go>Request a demo</button>
+          <p class="check__status" role="status" data-status></p>
+        </div>
+      </form>
+    </section>
+
+    <!-- after the request: the confirmation email is on its way -->
+    <section class="demo__view" data-view="sent" hidden>
+      <header class="check__head">
+        <p class="label">Try it live</p>
+        <h1>Check your inbox to confirm your email.</h1>
+        <p class="lead">We sent a link to <strong data-sent-to></strong>. It brings you back here, where you can follow your server getting ready.</p>
+        <p class="demo__fine">Nothing there after a few minutes? Look in your spam folder, or <a class="link" href="/demo" data-again>try again</a>.</p>
+      </header>
+    </section>
+
+    <!-- checking, review, queued, booting: a calm wait -->
+    <section class="demo__view" data-view="wait" hidden>
+      <header class="check__head">
+        <p class="label" data-wait-label>Your demo</p>
+        <h1 data-wait-title></h1>
+        <p class="lead" data-wait-lead></p>
+      </header>
+      <ol class="track" data-track></ol>
+      <p class="demo__eta" data-eta hidden></p>
+      <p class="demo__note">You can close this tab. We will email you a link as soon as your server is ready, and your two hours start only then.</p>
+    </section>
+
+    <!-- rejected, failed, ended, or the demo is not reachable at all -->
+    <section class="demo__view" data-view="stop" hidden>
+      <header class="check__head">
+        <p class="label" data-stop-label>Your demo</p>
+        <h1 data-stop-title></h1>
+        <p class="lead" data-stop-lead></p>
+        <p class="demo__actions" data-stop-actions></p>
+      </header>
+    </section>
+
+    <!-- ready: the chat -->
+    <section class="demo__view chat" data-view="chat" hidden>
+      <div class="chat__main">
+        <header class="machine">
+          <p class="machine__live"><span class="machine__dot" aria-hidden="true"></span><span class="label">Live</span><strong data-model></strong></p>
+          <p class="machine__hw" data-hardware></p>
+          <p class="machine__left" data-left hidden></p>
+        </header>
+
+        <p class="chat__notice" role="status" data-notice hidden></p>
+
+        <div class="msgs" data-msgs aria-live="polite">
+          <div class="msgs__empty" data-empty>
+            <h1>Ask it anything.</h1>
+            <p>Or start with the sample report. Everything here runs on the one server above, and the conversation is gone when you close the tab.</p>
+          </div>
+        </div>
+
+        <form class="composer" data-composer>
+          <div class="composer__doc" data-doc hidden></div>
+          <p class="composer__error" role="alert" data-doc-error hidden></p>
+          <label class="sr" for="prompt">Your message</label>
+          <textarea id="prompt" rows="1" placeholder="Ask something…" data-prompt></textarea>
+          <div class="composer__bar">
+            <label class="switch">
+              <input type="checkbox" data-think>
+              <span class="switch__track" aria-hidden="true"></span>
+              <span>Think first <span class="switch__hint">slower, better on hard questions</span></span>
+            </label>
+            <span class="composer__gap"></span>
+            <button class="ghost" type="button" data-new hidden>New chat</button>
+            <button class="btn" type="submit" data-send>Send</button>
+            <button class="btn" type="button" data-stop hidden>Stop</button>
+          </div>
+        </form>
+      </div>
+
+      <aside class="chat__side" aria-label="Examples and documents">
+        <section class="side">
+          <p class="label">Example</p>
+          <h2>Analyze a confidential financial report</h2>
+          <p class="side__doc">Norrvik Instruments, third-quarter report. An invented company, about two pages. <a class="link" href="/demo/sample-report.txt" target="_blank" rel="noopener">Read it</a></p>
+          <div class="side__prompts" data-examples>
+            <button class="prompt" type="button" data-example="risks">Summarize the risks</button>
+            <button class="prompt" type="button" data-example="kpis">Extract the key figures into a table</button>
+            <button class="prompt" type="button" data-example="board">Draft a short note to the board</button>
+          </div>
+        </section>
+        <section class="side">
+          <p class="label">Your own document</p>
+          <p class="side__text">Attach a PDF or text file, then ask about it. PDFs are read here in your browser.</p>
+          <input class="sr" type="file" id="attach" accept=".pdf,.txt,.md,.csv,application/pdf,text/plain" data-attach>
+          <label class="ghost" for="attach">Attach PDF or TXT</label>
+          <p class="side__warn">This demo runs on a rented server. On your own hardware, nothing leaves the building. Please do not upload real confidential documents here.</p>
+        </section>
+      </aside>
+    </section>
+
+    <noscript><p class="lead">This page needs JavaScript to work.</p></noscript>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__in">
+    <span>Intelligence, where your data already lives.</span>
+    <span>© 2026 locus</span>
+  </div>
+</footer>
+
+<script type="module" src="/src/demo.js"></script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+{
+	// locus-demo: the backend of the live demo (see README.md).
+	// Serves /api/demo/* behind the Pages site (service binding DEMO), runs two Workflows and a cron sweep.
+	//
+	// Secrets (set with `npx wrangler secret put NAME`; never put them in this file):
+	//   SIGNING_SECRET        ≥32 random chars; signs email links and the session cookie
+	//   TURNSTILE_SECRET_KEY  Turnstile widget secret
+	//   RESEND_API_KEY        Resend API key (sending domain verified in Resend)
+	//   OPENAI_API_KEY        OpenAI key for the approval agent
+	//   VAST_API_KEY          Vast.ai key (instance_read, instance_write, user_read, misc)
+	//   CF_API_TOKEN          Cloudflare token: Account › Cloudflare Tunnel › Edit, Zone › DNS › Edit
+	//   MANUAL_UPSTREAM_KEY   (Phase 2 only) llama-server --api-key of the hand-started machine
+	//   MANUAL_ACCESS_KEY     (Phase 2 only) ≥16 chars; the secret in /api/demo/manual?key=…
+	"name": "locus-demo",
+	"main": "src/index.js",
+	"compatibility_date": "2026-11-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": { "enabled": true },
+
+	// same database as the leads (prototype/wrangler.jsonc)
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "locus-leads",
+			"database_id": "140765d8-9980-4376-a66e-28fde68e7b29",
+			"migrations_dir": "migrations"
+		}
+	],
+
+	"workflows": [
+		{ "name": "locus-demo-checks", "binding": "CHECKS", "class_name": "ChecksWorkflow" },
+		{ "name": "locus-demo-provision", "binding": "PROVISION", "class_name": "ProvisionWorkflow" }
+	],
+
+	// cleanup sweep and queue admission
+	"triggers": { "crons": ["*/5 * * * *"] },
+
+	"vars": {
+		"SITE_URL": "https://locus-ai.tech",
+		"OWNER_EMAIL": "",
+		"EMAIL_FROM": "locus <demo@YOUR-DOMAIN>",
+
+		// spend caps
+		"CAP_MAX_CONCURRENT": "2",
+		"CAP_PER_EMAIL_DAYS": "7",
+		"CAP_PER_DOMAIN_HOURS": "24",
+		"CAP_DAILY_TOTAL": "6",
+		"CAP_REQUESTS_PER_IP_HOUR": "5",
+		"QUEUE_MAX_HOURS": "24",
+
+		// checks and approval agent
+		"MIN_DOMAIN_AGE_DAYS": "90",
+		"HOMEPAGE_MAX_CHARS": "6000",
+		"AGENT_MODEL": "gpt-6.1-terra",
+		"AGENT_REASONING_EFFORT": "medium",
+
+		// demo window and boot
+		"DEMO_WINDOW_MINUTES": "120",
+		"BOOT_TIMEOUT_MINUTES": "45",
+		"BOOT_ATTEMPTS": "2",
+
+		// Vast offer search and image (image and model values are set after the benchmark)
+		"VAST_IMAGE": "",
+		"VAST_DISK_GB": "250",
+		"VAST_RUNTYPE": "args",
+		"VAST_GPU_NAME": "RTX 5090",
+		"VAST_RAM_TIERS_GB": "192,128",
+		"VAST_MIN_RELIABILITY": "0.99",
+		"VAST_MIN_INET_DOWN": "1000",
+		"VAST_MAX_DPH": "3",
+		"VAST_PREFER_CPU": "EPYC,Xeon",
+		"MODEL_REPO": "",
+		"MODEL_FILES": "",
+		"RUNTIME": "ik",
+		"LLAMA_ARGS": "",
+		"MODEL_LABEL": "Qwen3.8-Flash-Next",
+
+		// Cloudflare account/zone for per-demo tunnels: locus-demo-<id>.<DEMO_DOMAIN>
+		"CF_ACCOUNT_ID": "",
+		"CF_ZONE_ID": "",
+		"DEMO_DOMAIN": "locus-ai.tech",
+
+		// chat proxy
+		"CHAT_MAX_BODY_BYTES": "400000",
+		"CHAT_MAX_TOKENS": "4096",
+		"CHAT_THINKING_KWARG": "enable_thinking",
+
+		// Phase 2 manual mode: set MANUAL_UPSTREAM_URL here and the two MANUAL_* secrets above
+		"MANUAL_UPSTREAM_URL": "",
+		"MANUAL_ENDS_AT": "",
+		"MANUAL_HW_CPU": "",
+		"MANUAL_HW_RAM_GB": "",
+		"MANUAL_HW_GPU": "1× RTX 5090"
+	}
+}
