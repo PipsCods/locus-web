@@ -120,7 +120,7 @@ export const onRequest = ({ request, env }) => env.DEMO.fetch(request);
 | `VAST_PREFER_CPU` | `EPYC,Xeon` | preferred within a tier (not a server-side filter) |
 | `MODEL_REPO`, `MODEL_FILES`, `RUNTIME`, `LLAMA_ARGS` | | passed to the start script; set after the benchmark |
 | `MODEL_LABEL` | `Qwen3.8-Flash-Next` | shown on the status page |
-| `CF_ACCOUNT_ID`, `CF_ZONE_ID`, `DEMO_DOMAIN` | | where tunnels and their CNAMEs live |
+| `CF_ACCOUNT_ID`, `CF_ZONE_ID`, `DEMO_DOMAIN` | | where tunnels and their CNAMEs live. Keep `DEMO_DOMAIN` the zone apex (`locus-ai.tech`): Cloudflare's free certificate covers one level of subdomain, so `locus-demo-<id>.demo.locus-ai.tech` would have no valid HTTPS certificate |
 | `CHAT_MAX_BODY_BYTES`, `CHAT_MAX_TOKENS`, `CHAT_THINKING_KWARG` | 400000, 4096, `enable_thinking` | chat proxy |
 | `MANUAL_*` | | manual mode, below |
 

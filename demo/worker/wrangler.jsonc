@@ -78,7 +78,7 @@
 		// Cloudflare account/zone for per-demo tunnels: locus-demo-<id>.<DEMO_DOMAIN>
 		"CF_ACCOUNT_ID": "",
 		"CF_ZONE_ID": "",
-		"DEMO_DOMAIN": "",
+		"DEMO_DOMAIN": "locus-ai.tech",
 
 		// chat proxy
 		"CHAT_MAX_BODY_BYTES": "400000",
