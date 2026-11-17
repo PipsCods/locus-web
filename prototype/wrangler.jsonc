@@ -13,10 +13,11 @@
 	"name": "locus",
 	"compatibility_date": "2026-11-01",
 	"pages_build_output_dir": "dist",
-	// the live demo: /api/demo/* (functions/api/demo/) hands every request to this Worker (demo/worker/)
-	"services": [
-		{ "binding": "DEMO", "service": "locus-demo" }
-	],
+	// the live demo: /api/demo/* (functions/api/demo/) hands every request to the locus-demo Worker
+	// (demo/worker/). Not bound yet: Cloudflare refuses to deploy a binding to a Worker that does not
+	// exist, and the Worker is not deployed. Until then /api/demo/* answers 503 "not set up yet".
+	// After deploying the Worker, add this back:
+	//   "services": [ { "binding": "DEMO", "service": "locus-demo" } ],
 	"d1_databases": [
 		{
 			"binding": "DB",
