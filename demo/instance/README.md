@@ -118,7 +118,7 @@ nohup /opt/locus/onstart.sh >>/var/log/locus-onstart.log 2>&1 &
 
 Server defaults: `127.0.0.1:8080 -ngl 999 -np 1 --jinja`, plus `--defer-ple`
 for ik (and `GGML_CUDA_NO_PINNED=1` from the wrapper) or
-`--fit off --no-op-offload` for mainline: the same base as `bench.sh`, so a
+`--fit off` for mainline: the same base as `bench.sh`, so a
 benchmarked config is reproduced by putting its `-ncmoe`/`-t`/`-c` in
 `LLAMA_ARGS`. `/health` needs no key on either runtime; everything else does.
 

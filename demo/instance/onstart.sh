@@ -29,7 +29,7 @@
 #
 # Server defaults: 127.0.0.1:8080, -ngl 999 -np 1 --jinja, plus
 #   ik:       --defer-ple (GGML_CUDA_NO_PINNED=1 via the wrapper)
-#   mainline: --fit off --no-op-offload
+#   mainline: --fit off
 # matching bench.sh, so a benchmarked config is reproduced by LLAMA_ARGS.
 #
 # Order: self-destruct timer first (so nothing outlives the TTL, even a hung
@@ -238,7 +238,7 @@ umask 022
 
 case "$RUNTIME" in
   ik) runtime_args=(--defer-ple) ;;
-  mainline) runtime_args=(--fit off --no-op-offload) ;;
+  mainline) runtime_args=(--fit off) ;;
 esac
 # Split LLAMA_ARGS into words without eval: xargs honours single and double
 # quotes (no backslash escapes inside quotes), so pass JSON in single quotes:

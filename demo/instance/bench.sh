@@ -32,7 +32,7 @@
 #   --hw-only               only record hardware facts and exit
 #   --summarize DIR         only rebuild results.md from DIR/results.jsonl
 #
-# Env: MAINLINE_OP_OFFLOAD_FLAG= (empty) drops --no-op-offload from mainline.
+# Env: MAINLINE_OP_OFFLOAD_FLAG=--no-op-offload adds that flag back to mainline (it cost ~40% prefill in the benchmark).
 # Env: IK_EXTRA / MAINLINE_EXTRA append flags to every server start of that
 # runtime (e.g. IK_EXTRA="-ub 2048 -b 2048"). HF_TOKEN is used if set.
 set -euo pipefail
@@ -372,11 +372,11 @@ vram_used_mib() { nvidia-smi --query-gpu=memory.used --format=csv,noheader,nouni
 #             repacks, which costs RAM and load time). GGML_CUDA_NO_PINNED=1
 #             is set by the llama-server-ik wrapper.
 #   mainline: --fit is on by default and would override -ngl/-ncmoe, so
-#             --fit off; --no-op-offload as specified in the plan.
+#             --fit off; no --no-op-offload (see BENCHMARK.md).
 runtime_flags() {
   case "$1" in
     ik) echo "--defer-ple --jinja $IK_EXTRA" ;;
-    mainline) echo "--fit off ${MAINLINE_OP_OFFLOAD_FLAG---no-op-offload} --jinja $MAINLINE_EXTRA" ;;
+    mainline) echo "--fit off ${MAINLINE_OP_OFFLOAD_FLAG-} --jinja $MAINLINE_EXTRA" ;;
   esac
 }
 
