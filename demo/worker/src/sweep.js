@@ -81,6 +81,8 @@ async function workflowStatus(binding, demoId) {
 
 export async function runSweep(deps, { maxActions = 12 } = {}) {
   const { db, cfg, vast, cf } = deps;
+  // Manual mode (one hand-started machine) runs without Vast: nothing was rented, so nothing to sweep.
+  if (!cfg.vastKey) return { skipped: "VAST_API_KEY not set" };
   const now = deps.now();
   const prefix = cfg.resourcePrefix;
   const [instances, tunnels, dns] = await Promise.all([

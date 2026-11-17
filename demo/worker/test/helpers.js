@@ -7,7 +7,7 @@ export const SECRET = "test-secret-test-secret-test-secret-0123";
 
 export function makeTestDeps({ vars = {}, openai, llama, now } = {}) {
   const clock = { t: now ?? Date.parse("2026-11-16T12:00:00Z") };
-  const cfg = config({ SIGNING_SECRET: SECRET, OWNER_EMAIL: "owner@locus.test", DEMO_DOMAIN: "demo.locus.test", VAST_IMAGE: "ghcr.io/x/locus-demo:1", SITE_URL: "https://site.test", ...vars });
+  const cfg = config({ SIGNING_SECRET: SECRET, OWNER_EMAIL: "owner@locus.test", DEMO_DOMAIN: "demo.locus.test", VAST_IMAGE: "ghcr.io/x/locus-demo:1", VAST_API_KEY: "test-vast-key", SITE_URL: "https://site.test", ...vars });
   const l = llama ?? fakeLlama();
   const created = { checks: [], provision: [] };
   const deps = {
