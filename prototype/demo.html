@@ -125,6 +125,11 @@
               <span class="switch__track" aria-hidden="true"></span>
               <span>Think first <span class="switch__hint">slower, better on hard questions</span></span>
             </label>
+            <div class="pick" role="radiogroup" aria-label="Model" data-pick hidden>
+              <label class="pick__opt" title="Auto picks the right model for each question"><input type="radio" name="model" value="auto" checked><span>Auto</span><span class="sr">: picks the right model for each question</span></label>
+              <label class="pick__opt" title="Deep: the large model, best for hard questions"><input type="radio" name="model" value="deep"><span>Deep</span><span class="sr">: the large model, best for hard questions</span></label>
+              <label class="pick__opt" title="Fast: quicker answers for everyday questions"><input type="radio" name="model" value="fast"><span>Fast</span><span class="sr">: quicker answers for everyday questions</span></label>
+            </div>
             <span class="composer__gap"></span>
             <button class="ghost" type="button" data-new hidden>New chat</button>
             <button class="btn" type="submit" data-send>Send</button>

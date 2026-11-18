@@ -212,6 +212,7 @@ function stop(kind) {
 const msgsEl = $("[data-msgs]"), emptyEl = $("[data-empty]"), composer = $("[data-composer]"), promptEl = $("[data-prompt]");
 const sendBtn = $("[data-send]"), stopBtn = $("[data-stop]"), newBtn = $("[data-new]"), thinkEl = $("[data-think]");
 const docEl = $("[data-doc]"), docError = $("[data-doc-error]"), attachEl = $("[data-attach]"), noticeEl = $("[data-notice]");
+const pickEl = $("[data-pick]"), pickInputs = [...pickEl.querySelectorAll("input")];
 
 // the conversation, in memory only: { role, content (what the model gets), text (what the visitor typed), doc, reasoning, timings, end, el }
 const chat = { started: false, msgs: [], busy: null, doc: null, over: false, md: null };
@@ -219,11 +220,25 @@ let leftTimer = 0;
 
 async function ready(st) {
   if (!chat.md) chat.md = await loadMarkdown();
-  $("[data-model]").textContent = st.model || "Live model";
+  const tiers = showPicker(st.models);
+  $("[data-model]").textContent = tiers.length > 1 ? tiers.map((m) => m.label).join(" + ") : st.model || "Live model";
   $("[data-hardware]").textContent = hardwareLine(st.hardware);
   startCountdown(st.ends_at);
   if (!chat.started) { chat.started = true; show("chat"); }
 }
+
+// a tiered box offers Auto / Deep / Fast; a single-model box shows no picker and sends no model
+function showPicker(models) {
+  const ids = new Set(Array.isArray(models) ? models.map((m) => m?.id) : []);
+  for (const input of pickInputs) input.closest("label").hidden = !ids.has(input.value);
+  const offered = pickInputs.filter((i) => ids.has(i.value));
+  pickEl.hidden = offered.length < 2;
+  if (!pickEl.hidden && !offered.some((i) => i.checked)) offered[0].checked = true;
+  // the models behind the choice, for the header: every one except "auto"
+  return pickEl.hidden ? [] : models.filter((m) => m.id !== "auto" && offered.some((i) => i.value === m.id));
+}
+
+const pickedModel = () => (pickEl.hidden ? undefined : pickInputs.find((i) => i.checked && !i.closest("label").hidden)?.value);
 
 function hardwareLine(h) {
   if (!h) return "";
@@ -327,12 +342,14 @@ function drawAnswer(m) {
   if (m.end === "error") parts.push(`<span class="msg__err">${esc(m.error)}</span>`);
   if (m.end === "stopped") parts.push("<span>Stopped</span>");
   const t = m.timings;
+  if (m.by) parts.push('<span data-by></span>');
   if (t?.predicted_per_second) {
     const detail = [t.predicted_n && `${t.predicted_n.toLocaleString("en-US")} tokens written`, t.prompt_n && t.prompt_per_second && `${t.prompt_n.toLocaleString("en-US")} read at ${Math.round(t.prompt_per_second).toLocaleString("en-US")}/s`].filter(Boolean).join(" · ");
     parts.push(`<span class="msg__speed">${Math.round(t.predicted_per_second)} tokens/s</span>${detail ? `<span>${esc(detail)}</span>` : ""}`);
   }
   if (m.end && m === chat.msgs.at(-1) && !chat.over) parts.push(`<button class="ghost ghost--sm" type="button" data-regen>${m.end === "error" ? "Try again" : "Regenerate"}</button>`);
   meta.innerHTML = parts.join("");
+  if (m.by) $("[data-by]", meta).textContent = `by ${m.by}`; // the model's name comes from the stream: text only
   meta.hidden = !parts.length;
 }
 
@@ -347,6 +364,7 @@ function syncButtons() {
   stopBtn.hidden = !busy;
   newBtn.hidden = busy || !chat.msgs.length || chat.over;
   for (const b of document.querySelectorAll("[data-example], [data-regen]")) b.disabled = busy || chat.over;
+  for (const i of pickInputs) i.disabled = busy || chat.over;
 }
 
 // ── sending ──
@@ -368,7 +386,8 @@ async function answer() {
   // the answer before this one loses its "Regenerate" button: only the newest can be redone
   const prev = chat.msgs.at(-2);
   if (prev?.role === "assistant") drawAnswer(prev);
-  const m = { role: "assistant", content: "", reasoning: "", started: Date.now() };
+  // with a picker, the stream names the model that answered (Auto may choose either)
+  const m = { role: "assistant", content: "", reasoning: "", started: Date.now(), named: !pickEl.hidden };
   const history = chat.msgs.filter((x) => x.role === "user" || x.end !== "error").map(({ role, content }) => ({ role, content }));
   chat.msgs.push(m);
   addMessage(m);
@@ -382,7 +401,7 @@ async function answer() {
     const res = await fetch("/api/demo/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: history, thinking: thinkEl.checked }),
+      body: JSON.stringify({ messages: history, thinking: thinkEl.checked, model: pickedModel() }),
       signal: ctrl.signal,
     });
     if (!res.ok || !res.body) {
@@ -405,6 +424,7 @@ async function answer() {
         m.content += c;
       }
       if (chunk.timings) m.timings = chunk.timings;
+      if (m.named && typeof chunk.model === "string" && chunk.model) m.by = chunk.model.slice(0, 80);
       paint(m);
     }
     m.end = "done";

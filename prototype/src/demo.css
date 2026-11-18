@@ -149,6 +149,19 @@ input.sr:focus-visible + label.ghost { outline: 2px solid var(--ink); outline-of
 .switch input:disabled + .switch__track { opacity: 0.5; }
 .switch__hint { color: var(--faint); font-size: 0.8125rem; }
 
+/* which model answers (a tiered box only): Auto · Deep · Fast, green like the switch, never pink */
+.pick { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+.pick[hidden] { display: none; }
+.pick__opt { position: relative; display: inline-flex; cursor: pointer; }
+.pick__opt[hidden] { display: none; }
+.pick__opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.pick__opt span:not(.sr) { padding: 6px 10px; border: 1px solid transparent; border-radius: 6px; color: var(--soft); font: 500 0.8125rem/1 var(--sans); transition: background-color 0.15s, border-color 0.15s, color 0.15s; }
+.pick__opt:hover span:not(.sr) { color: var(--ink); }
+.pick__opt input:checked + span { border-color: var(--green); background: var(--green); color: var(--ink); }
+.pick__opt input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: 2px; }
+.pick__opt input:disabled + span { opacity: 0.5; cursor: default; }
+.pick__opt:has(input:disabled) { cursor: default; }
+
 /* ── the side: example report and uploads ── */
 .side { display: grid; gap: 10px; justify-items: start; padding: 18px 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
 .side h2 { font-size: 1.25rem; letter-spacing: -0.02em; line-height: 1.2; }

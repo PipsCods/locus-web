@@ -4,7 +4,8 @@
 // Pick the status to show, first match wins:
 //   1. ?demo=<status> on the page address (the dev bar at the bottom of /demo sets it),
 //      plus &step=reserving|downloading|loading for "booting", &left=<minutes> for "ready",
-//      and &chat=401|409|413|502 to make the chat fail that way
+//      and &chat=401|409|413|502 to make the chat fail that way,
+//      and &models=0 for a single-model box (no Auto / Deep / Fast picker)
 //   2. the cookie set by /api/demo/confirm?token=<status> (any other token means "ready")
 //   3. DEMO_STATUS=<status> in the environment:  DEMO_STATUS=ready npm run dev
 //   4. "none"
@@ -38,8 +39,12 @@ function pick(req) {
   try { page = new URL(req.headers.referer).searchParams; } catch { /* no referer */ }
   const cookie = /(?:^|;\s*)locus_demo_dev=([a-z]+)/.exec(req.headers.cookie ?? "")?.[1];
   const status = [page.get("demo"), cookie, process.env.DEMO_STATUS].find((s) => STATUSES.includes(s)) ?? "none";
-  return { status, step: page.get("step"), left: page.get("left"), chat: page.get("chat") };
+  return { status, step: page.get("step"), left: page.get("left"), chat: page.get("chat"), models: page.get("models") !== "0" };
 }
+
+// a tiered box, like CHAT_MODELS on the Worker; the label of deep/fast is what llama-server's --alias streams back
+const MODELS = [{ id: "auto", label: "Auto" }, { id: "deep", label: "Qwen3.8-Flash-Next" }, { id: "fast", label: "Qwen3.8-27B" }];
+const labelOf = (id) => MODELS.find((m) => m.id === id)?.label;
 
 function status(req, res) {
   const p = pick(req);
@@ -57,6 +62,7 @@ function status(req, res) {
     out.ends_at = new Date(Date.now() + left * 60_000).toISOString();
     out.hardware = { cpu: "AMD EPYC 9654", ram_gb: 128, gpu: "RTX 5090" };
     out.model = "Qwen3.8-Flash-Next";
+    if (p.models) out.models = MODELS;
   }
   send(res, 200, out);
 }
@@ -158,6 +164,7 @@ async function chat(req, res) {
   if (p.chat === "409" || p.status !== "ready") return send(res, 409, { ok: false, error: "Your demo has ended." });
   if (p.chat === "502") return send(res, 502, { ok: false, error: "The machine is not answering." });
   if (!Array.isArray(body?.messages) || !body.messages.length) return send(res, 400, { ok: false, error: "No messages." });
+  if (p.models && body.model !== undefined && !labelOf(body.model)) return send(res, 400, { ok: false, error: "Bad request: model." });
 
   const last = String(body.messages.at(-1)?.content ?? "");
   const kind = topic(last.split("</document>").at(-1));
@@ -172,7 +179,9 @@ async function chat(req, res) {
   res.setHeader("content-type", "text/event-stream; charset=utf-8");
   res.setHeader("cache-control", "no-cache");
   res.setHeader("connection", "keep-alive");
-  const id = `chatcmpl-dev${Date.now()}`, created = Math.floor(Date.now() / 1000), model = "Qwen3.8-Flash-Next";
+  // Auto: a stand-in for the router's pick, so the page can be seen naming either model
+  const tier = !p.models || !body.model ? null : body.model !== "auto" ? body.model : body.thinking || last.length > 2000 ? "deep" : "fast";
+  const id = `chatcmpl-dev${Date.now()}`, created = Math.floor(Date.now() / 1000), model = tier ? labelOf(tier) : "Qwen3.8-Flash-Next";
   const chunk = (delta, extra = {}) => res.write(`data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model, system_fingerprint: "dev", choices: [{ index: 0, delta, finish_reason: null }], ...extra })}\n\n`);
 
   let closed = false;
