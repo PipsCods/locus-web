@@ -7,7 +7,7 @@ import { runSweep } from "../src/sweep.js";
 import { cookieFrom, fakeStep, makeTestDeps, resetDb } from "./helpers.js";
 
 const ROOT = "http://127.0.0.1:8787/api/demo";
-const KEY = "locus-preview-2026";
+const KEY = crypto.randomUUID();
 const EXPIRES_AT = "2026-11-16T12:20:00.000Z";
 const payload = { profile: "threadripper", workload: "invoice-review", key: KEY };
 

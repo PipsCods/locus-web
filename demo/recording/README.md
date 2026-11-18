@@ -2,12 +2,23 @@
 
 ## Local walkthrough
 
-Run `npm run dev` in `prototype/` and open
-[`/demo?recording=1`](http://127.0.0.1:5173/demo?recording=1).
-Select **Threadripper PRO 9995WX** and **Invoice review**, then enter
-`locus-preview-2026`. The recommendation leads to a simulated reservation
-and the locus invoice chat. Continue to **Try the two-model server**, pick
-**Deep**, and ask which records to check. **Open Invoice Review preview**
+Choose a fresh password-manager key of 16–256 characters. Run this from
+`prototype/` in Bash and enter the key at the silent prompt.
+
+```bash
+(
+  IFS= read -r -s -p 'Recording key: ' RECORDING_ACCESS_KEY
+  printf '\n'
+  RECORDING_ACCESS_KEY="$RECORDING_ACCESS_KEY" npm run dev -- --host 127.0.0.1 --strictPort
+)
+```
+
+Open [`/demo?recording=1`](http://127.0.0.1:5173/demo?recording=1).
+Select **Threadripper PRO 9995WX** and **Invoice review**, then enter your
+key and select **See recommendation**. **Reserve demo server** starts the
+simulated progress and opens the locus invoice chat. Continue to
+**Try the two-model server**, pick **Deep**, and ask which records to
+check. **Open Invoice Review preview**
 opens the separate finance interface with the same invoice. Ask the
 pre-filled question, then open the purchase order and goods receipt.
 
@@ -35,8 +46,8 @@ offer and a spend ceiling before arming the take.
 Keep values in an ignored `.dev.vars.recording`. For a local fake Workflow
 smoke test, start from `demo/worker/dev.vars.example`, leave `DEV_FAKES=1`,
 and add the recording settings with a future deadline and a maximum hourly
-price of at least `0.55`. Use the preview key above and set
-`VAST_API_KEY=local-fake` if testing the sweep. The fake catalog has the
+price of at least `0.55`. Set `RECORDING_ACCESS_KEY` to your private key.
+To test the sweep, set `VAST_API_KEY=local-fake`. The fake catalog has the
 Threadripper offer.
 
 ```sh

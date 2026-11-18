@@ -1,9 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { PROFILES, RECOMMENDATION, WORKLOAD } from "../shared/recording.js";
 import { invoice, usd } from "../shared/invoice.js";
 import purchaseOrder from "../../demo/recording/purchase-order.json" with { type: "json" };
 
-const PREVIEW_KEY = "locus-preview-2026";
 const previews = new Map();
 const models = [{ id: "fast", label: "Qwen3.8-27B" }, { id: "deep", label: "Qwen3.8-Flash-Next" }];
 const hardware = { cpu: "AMD Threadripper PRO 9995WX", ram_gb: 256, gpu: "1× RTX 3090" };
@@ -46,7 +45,14 @@ export async function recordingApi(path, req, res, page, send, readBody) {
     return send(res, 200, { ok: true, source, excess, discrepancy: excess * invoice.unitPrice });
   }
   if (path !== "/recording/recommendation" && path !== "/recording/start") return send(res, 404, { ok: false, error: "Not found." });
-  if (body?.key !== PREVIEW_KEY) return send(res, 401, { ok: false, error: "The validation key is incorrect." });
+  const key = process.env.RECORDING_ACCESS_KEY;
+  if (!key || key.length < 16 || key.length > 256) {
+    return send(res, 503, { ok: false, error: "Set a recording key in the terminal and restart the preview." });
+  }
+  if (typeof body?.key !== "string" || body.key.length !== key.length ||
+      !timingSafeEqual(Buffer.from(body.key, "utf16le"), Buffer.from(key, "utf16le"))) {
+    return send(res, 401, { ok: false, error: "The validation key is incorrect." });
+  }
   if (!PROFILES.some(({ id }) => id === body.profile) || body.workload !== WORKLOAD.id) {
     return send(res, 400, { ok: false, error: "Choose a server and workload." });
   }
