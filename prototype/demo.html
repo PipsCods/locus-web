@@ -26,12 +26,49 @@
 <!-- one page, several states: demo.js asks /api/demo/status and shows the matching section -->
 <main class="check demo" id="top">
   <div class="wrap">
+    <p class="recording__mode label" data-recording-mode hidden></p>
 
     <section class="demo__view" data-view="loading" aria-busy="true">
       <header class="check__head">
         <p class="label">Try it live</p>
         <h1>One moment…</h1>
       </header>
+    </section>
+
+    <section class="demo__view" data-view="recording" hidden>
+      <header class="check__head recording__head">
+        <h1>Try AI on your server.</h1>
+        <p class="lead">Choose the server you already own and what you want to do with it.</p>
+      </header>
+      <form class="recording__form" data-recording-form>
+        <fieldset class="step">
+          <legend>Your server</legend>
+          <div class="recording__choices" data-recording-profiles></div>
+        </fieldset>
+        <fieldset class="step">
+          <legend>Workload</legend>
+          <div class="recording__choices" data-recording-workload></div>
+        </fieldset>
+        <fieldset class="step">
+          <legend>Validation key</legend>
+          <div class="field recording__key">
+            <label class="sr" for="recording-key">Validation key</label>
+            <input type="password" id="recording-key" name="key" maxlength="256" autocomplete="off" required aria-describedby="recording-help recording-error">
+            <p class="step__hint" id="recording-help" data-recording-help hidden>Preview key <code>locus-preview-2026</code></p>
+          </div>
+        </fieldset>
+        <div class="check__go">
+          <button class="btn" type="submit" data-recommend>See recommendation</button>
+          <p class="field__error" id="recording-error" role="alert" hidden></p>
+        </div>
+      </form>
+      <section class="recording__result" data-recommendation aria-labelledby="recording-result-title" hidden>
+        <p class="label">Recommended setup</p>
+        <h2 id="recording-result-title" tabindex="-1"><span data-rec-gpu></span><span data-rec-model></span></h2>
+        <p class="side__text">The model uses the server’s CPU and memory alongside the GPU.</p>
+        <p class="recording__availability" data-rec-availability role="status"></p>
+        <button class="btn" type="button" data-reserve>Reserve demo server</button>
+      </section>
     </section>
 
     <!-- status "none": ask for a demo -->
@@ -83,7 +120,7 @@
       </header>
       <ol class="track" data-track></ol>
       <p class="demo__eta" data-eta hidden></p>
-      <p class="demo__note">You can close this tab. We will email you a link as soon as your server is ready, and your two hours start only then.</p>
+      <p class="demo__note" data-wait-note>You can close this tab. We will email you a link as soon as your server is ready, and your two hours start only then.</p>
     </section>
 
     <!-- rejected, failed, ended, or the demo is not reachable at all -->
@@ -100,7 +137,7 @@
     <section class="demo__view chat" data-view="chat" hidden>
       <div class="chat__main">
         <header class="machine">
-          <p class="machine__live"><span class="machine__dot" aria-hidden="true"></span><span class="label">Live</span><strong data-model></strong></p>
+          <p class="machine__live"><span class="machine__dot" aria-hidden="true"></span><span class="label" data-machine-label>Live</span><strong data-model></strong></p>
           <p class="machine__hw" data-hardware></p>
           <p class="machine__left" data-left hidden></p>
         </header>
@@ -139,7 +176,7 @@
       </div>
 
       <aside class="chat__side" aria-label="Examples and documents">
-        <section class="side">
+        <section class="side" data-report-example>
           <p class="label">Example</p>
           <h2>Analyze a confidential financial report</h2>
           <p class="side__doc">Norrvik Instruments, third-quarter report. An invented company, about two pages. <a class="link" href="/demo/sample-report.txt" target="_blank" rel="noopener">Read it</a></p>
@@ -149,7 +186,21 @@
             <button class="prompt" type="button" data-example="board">Draft a short note to the board</button>
           </div>
         </section>
-        <section class="side">
+        <section class="side" data-invoice-example hidden>
+          <p class="label">Sample invoice</p>
+          <h2>INV-1042</h2>
+          <p class="side__doc">Kestrel Valve &amp; Pump</p>
+          <details class="recording__invoice">
+            <summary class="link">Read invoice</summary>
+            <pre data-invoice-text></pre>
+          </details>
+          <div class="side__prompts">
+            <button class="prompt" type="button" data-example="invoice">Extract the total and PO reference</button>
+            <button class="prompt" type="button" data-example="records" hidden>Identify the records to check</button>
+          </div>
+          <a class="link" data-recording-next hidden></a>
+        </section>
+        <section class="side" data-attach-panel>
           <p class="label">Your own document</p>
           <p class="side__text">Attach a PDF or text file, then ask about it. PDFs are read here in your browser.</p>
           <input class="sr" type="file" id="attach" accept=".pdf,.txt,.md,.csv,application/pdf,text/plain" data-attach>

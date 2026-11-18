@@ -109,16 +109,23 @@ export async function confirm(request, deps) {
 // GET /api/demo/status
 export async function status(request, deps) {
   const s = await session(request, deps);
-  if (!s) return json({ ok: true, status: "none" });
-  if (s.manual) return json(manualStatus(deps));
-  const demo = await getDemo(deps.db, s.demoId);
-  return json(withModels(publicStatus(demo && { ...demo, model: deps.cfg.modelLabel }, deps.now()), deps.cfg));
+  const recording = deps.cfg.recording ? { recording: deps.cfg.devFakes ? "preview" : "private" } : {};
+  if (!s) return json({ ok: true, status: "none", ...recording });
+  if (s.manual && !deps.cfg.recording) return json(manualStatus(deps));
+  const row = s.demoId && await getDemo(deps.db, s.demoId);
+  const demo = sessionRow(row, deps.cfg);
+  const out = publicStatus(demo && { ...demo, model: deps.cfg.modelLabel }, deps.now());
+  return json(deps.cfg.recording ? { ...out, ...recording } : withModels(out, deps.cfg));
 }
 
 /** A ready tiered box also lists the models the visitor can pick from. */
 function withModels(st, cfg) {
   if (st.status !== "ready" || !cfg.chatModels.length) return st;
   return { ...st, models: cfg.chatModels.map(({ id, label }) => ({ id, label })) };
+}
+
+function sessionRow(row, cfg) {
+  return row && Boolean(row.recording_profile) === Boolean(cfg.recording) ? row : null;
 }
 
 function manualStatus(deps) {
@@ -139,12 +146,13 @@ function manualStatus(deps) {
 async function upstreamFor(request, deps) {
   const s = await session(request, deps);
   if (!s) return { error: fail(401, "Your demo session has expired. Please use the link from your email.") };
-  if (s.manual) {
+  if (s.manual && !deps.cfg.recording) {
     const st = manualStatus(deps);
     if (st.status !== "ready") return { error: fail(409, "This demo has ended.") };
     return { url: deps.cfg.manual.url, key: deps.cfg.manual.key };
   }
-  const demo = await getDemo(deps.db, s.demoId);
+  const row = s.demoId && await getDemo(deps.db, s.demoId);
+  const demo = sessionRow(row, deps.cfg);
   const st = publicStatus(demo, deps.now());
   if (st.status !== "ready" || !demo.hostname || !demo.api_key) return { error: fail(409, st.status === "ended" ? "This demo has ended." : "The demo machine is not ready yet.") };
   return { url: `https://${demo.hostname}`, key: demo.api_key };
@@ -166,7 +174,7 @@ export async function chat(request, deps) {
     if (!m || !["system", "user", "assistant"].includes(m.role) || typeof m.content !== "string") return fail(400, "Bad request: messages.");
   }
   // a tiered box takes a model pick; a single-model box ignores the field
-  const models = cfg.chatModels;
+  const models = cfg.recording ? [] : cfg.chatModels;
   const model = models.length && body.model !== undefined && body.model !== null ? body.model : undefined;
   if (model !== undefined && !models.some((m) => m.id === model)) return fail(400, "Bad request: model.");
   const requested = Number(body.max_tokens);

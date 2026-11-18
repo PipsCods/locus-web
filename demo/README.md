@@ -52,3 +52,5 @@ visitors load on the page. `instance/prompts/sample-report.txt` (Kestrel Valve
 results in `BENCHMARK.md` refer to it. Both are invented. They are kept apart
 so that editing the page's example does not silently change what the recorded
 benchmark measured.
+
+The [recording walkthrough](recording/README.md) has a separate supplier invoice, purchase order and goods receipt.

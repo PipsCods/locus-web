@@ -33,9 +33,18 @@ export function tieredEnv(env) {
 export function config(env) {
   const windowMinutes = num(env.DEMO_WINDOW_MINUTES, 120);
   const bootTimeoutMinutes = num(env.BOOT_TIMEOUT_MINUTES, 45);
+  const recording = env.RECORDING_TAKE_ID ? {
+    take: str(env.RECORDING_TAKE_ID),
+    key: str(env.RECORDING_ACCESS_KEY),
+    expiresAt: str(env.RECORDING_EXPIRES_AT),
+    maxDph: num(env.RECORDING_MAX_DPH, 0),
+    offerId: num(env.RECORDING_OFFER_ID, 0),
+  } : null;
   return {
     siteUrl: str(env.SITE_URL, "https://locus-ai.tech").replace(/\/$/, ""),
     secret: str(env.SIGNING_SECRET),
+    devFakes: env.DEV_FAKES === "1",
+    recording,
     ownerEmail: str(env.OWNER_EMAIL),
     emailFrom: str(env.EMAIL_FROM, "locus <demo@example.com>"),
     resendKey: str(env.RESEND_API_KEY),
@@ -99,7 +108,7 @@ export function config(env) {
     cfZoneId: str(env.CF_ZONE_ID),
     cfApiToken: str(env.CF_API_TOKEN),
     demoDomain: str(env.DEMO_DOMAIN), // e.g. demo.example.com -> locus-demo-<id>.demo.example.com
-    resourcePrefix: "locus-demo-",
+    resourcePrefix: recording ? "locus-recording-" : "locus-demo-",
 
     // chat proxy
     chatMaxBodyBytes: num(env.CHAT_MAX_BODY_BYTES, 400_000),

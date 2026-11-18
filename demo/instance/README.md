@@ -174,6 +174,7 @@ nohup /opt/locus/onstart.sh >>/var/log/locus-onstart.log 2>&1 &
 | `LLAMA_API_KEY` | yes | bearer key; written to a 0600 file and passed with `--api-key-file` |
 | `CF_TUNNEL_TOKEN` | yes | remotely-managed tunnel token; ingress must point at `http://localhost:8080` |
 | `DEMO_TTL_SECONDS` | yes | hard lifetime from container start; then the instance destroys itself |
+| `DEMO_EXPIRES_AT` | no | absolute Unix timestamp in seconds. If earlier than the container’s own deadline, the instance destroys itself at this timestamp |
 | `CONTAINER_ID`, `CONTAINER_API_KEY` | injected by Vast | used by the self-destruct timer |
 | `HF_TOKEN`, `MODELS_DIR`, `STARTUP_TIMEOUT`, `DESTROY_ON_FAILURE` | no | see the header of `onstart.sh` |
 

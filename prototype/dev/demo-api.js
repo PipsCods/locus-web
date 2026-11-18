@@ -12,6 +12,7 @@
 // Status "unreachable" answers 503, like the site with no Worker bound.
 
 import { cleanLead } from "../shared/lead.js";
+import { recordingAnswer, recordingApi, recordingStatus } from "./recording-api.js";
 
 const STATUSES = ["none", "checking", "review", "queued", "booting", "ready", "rejected", "failed", "ended", "unreachable"];
 const COOKIE = "locus_demo_dev";
@@ -34,9 +35,12 @@ const readBody = (req, max) => new Promise((resolve) => {
 });
 
 // the page's own query string travels in the Referer header of every fetch it makes
+function pageParams(req) {
+  try { return new URL(req.headers.referer).searchParams; } catch { return new URLSearchParams(); }
+}
+
 function pick(req) {
-  let page = new URLSearchParams();
-  try { page = new URL(req.headers.referer).searchParams; } catch { /* no referer */ }
+  const page = pageParams(req);
   const cookie = /(?:^|;\s*)locus_demo_dev=([a-z]+)/.exec(req.headers.cookie ?? "")?.[1];
   const status = [page.get("demo"), cookie, process.env.DEMO_STATUS].find((s) => STATUSES.includes(s)) ?? "none";
   return { status, step: page.get("step"), left: page.get("left"), chat: page.get("chat"), models: page.get("models") !== "0" };
@@ -47,6 +51,8 @@ const MODELS = [{ id: "auto", label: "Auto" }, { id: "deep", label: "Qwen3.8-Fla
 const labelOf = (id) => MODELS.find((m) => m.id === id)?.label;
 
 function status(req, res) {
+  const recording = recordingStatus(req, pageParams(req));
+  if (recording) return send(res, 200, recording);
   const p = pick(req);
   if (p.status === "unreachable") return send(res, 503, { ok: false, error: "The live demo is not set up yet." });
   const out = { ok: true, status: p.status };
@@ -158,20 +164,24 @@ const pieces = (text) => text.match(/\s*[\w€.,%×−–'’]+|\s*[^\s\w]|\s+/g
 async function chat(req, res) {
   if (req.method !== "POST") return send(res, 405, { ok: false, error: "Use POST." });
   const p = pick(req);
+  const recording = recordingStatus(req, pageParams(req));
+  if (recording) Object.assign(p, { status: recording.status, models: recording.models });
   const { body, tooBig } = await readBody(req, 200_000);
   if (tooBig || p.chat === "413") return send(res, 413, { ok: false, error: "Too large." });
   if (p.chat === "401" || p.status === "none") return send(res, 401, { ok: false, error: "No demo session." });
   if (p.chat === "409" || p.status !== "ready") return send(res, 409, { ok: false, error: "Your demo has ended." });
   if (p.chat === "502") return send(res, 502, { ok: false, error: "The machine is not answering." });
   if (!Array.isArray(body?.messages) || !body.messages.length) return send(res, 400, { ok: false, error: "No messages." });
-  if (p.models && body.model !== undefined && !labelOf(body.model)) return send(res, 400, { ok: false, error: "Bad request: model." });
+  if (p.models && body.model !== undefined && !(recording ? p.models.some(({ id }) => id === body.model) : labelOf(body.model))) {
+    return send(res, 400, { ok: false, error: "Bad request: model." });
+  }
 
   const last = String(body.messages.at(-1)?.content ?? "");
   const kind = topic(last.split("</document>").at(-1));
   const think = body.thinking ? pieces(THOUGHTS[kind]) : [];
   // "echo: <text>" streams the text back as the answer: handy to check what the page does with hostile markdown
   const echo = /^echo:\s?([\s\S]*)$/.exec(last)?.[1];
-  const words = pieces(echo ?? ANSWERS[kind]);
+  const words = pieces(echo ?? recordingAnswer(recording, body.model, last) ?? ANSWERS[kind]);
   const promptN = Math.round(body.messages.reduce((n, m) => n + String(m.content ?? "").length, 0) / 3.8);
   const speed = 38 + Math.random() * 8; // tokens a second, about what the benchmark aims for
 
@@ -203,6 +213,7 @@ async function chat(req, res) {
 
 export function demoApi(req, res, next) {
   const path = req.url.split("?")[0];
+  if (path.startsWith("/recording/")) return recordingApi(path, req, res, pageParams(req), send, readBody);
   if (path === "/status") return status(req, res);
   if (path === "/request") return request(req, res);
   if (path === "/confirm") return confirm(req, res);

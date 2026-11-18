@@ -17,6 +17,7 @@
 #                     ingress points at http://localhost:8080
 #   DEMO_TTL_SECONDS  hard lifetime, counted from container start; then the
 #                     instance destroys itself
+#   DEMO_EXPIRES_AT   optional absolute Unix deadline, also enforced in the Worker
 #   CONTAINER_ID, CONTAINER_API_KEY   injected by Vast; used for self-destruct
 #
 # Tiered mode (several model servers behind router.py) replaces the four
@@ -137,6 +138,10 @@ arm_self_destruct() {
     deadline=$(cat "$STATE_DIR/deadline")   # never extended by a re-run
   else
     deadline=$(( $(container_start) + DEMO_TTL_SECONDS ))
+    if [[ -n "${DEMO_EXPIRES_AT:-}" ]]; then
+      [[ "$DEMO_EXPIRES_AT" =~ ^[1-9][0-9]{0,11}$ ]] || { status "failed: DEMO_EXPIRES_AT must be a Unix timestamp"; exit 1; }
+      if (( DEMO_EXPIRES_AT < deadline )); then deadline=$DEMO_EXPIRES_AT; fi
+    fi
     echo "$deadline" >"$STATE_DIR/deadline"
   fi
   if [[ -s "$RUN_DIR/self-destruct.pid" ]] && pid=$(cat "$RUN_DIR/self-destruct.pid") && kill -0 "$pid" 2>/dev/null; then

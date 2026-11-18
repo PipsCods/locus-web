@@ -211,3 +211,53 @@ input.sr:focus-visible + label.ghost { outline: 2px solid var(--ink); outline-of
 .devbar span { padding: 5px 4px; color: var(--faint); }
 .devbar a { padding: 5px 6px; border-radius: 4px; color: var(--soft); text-decoration: none; }
 .devbar a[aria-current] { background: var(--ink); color: var(--black); }
+
+/* Local recording picker */
+.recording__mode {
+  width: fit-content;
+  margin-bottom: 22px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--soft);
+}
+
+.demo__view[data-view="recording"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.62fr);
+  gap: 22px 30px;
+  align-items: start;
+}
+
+.demo__view[data-view="recording"][hidden] { display: none; }
+.recording__head { grid-column: 1 / -1; }
+.demo__view .recording__head { margin-bottom: 4px; }
+.recording__form { display: grid; gap: 20px; }
+.recording__choices { display: flex; flex-wrap: wrap; gap: 10px; }
+.recording__choices .opt { flex: 1 1 200px; }
+.recording__choices input:checked + .opt__body { border-color: var(--ink); background: var(--forest); }
+.recording__key { margin-top: 0; }
+.recording__form .field__error { margin-top: 0; }
+.recording__result {
+  display: grid;
+  gap: 14px;
+  padding: clamp(18px, 2.6vw, 28px);
+  border: 1px solid var(--green);
+  border-radius: 14px;
+  background: var(--forest);
+}
+.recording__result[hidden], .side[hidden], .prompt[hidden] { display: none; }
+.recording__result h2 { display: grid; gap: 4px; font-size: clamp(1.45rem, 2.6vw, 2.1rem); }
+.recording__result h2 span + span { color: var(--soft); font-size: 0.77em; }
+.recording__availability { color: var(--soft); font-size: 0.875rem; }
+.recording__availability.is-unavailable { color: var(--error); }
+.recording__result .btn { width: fit-content; border: 0; cursor: pointer; }
+.recording__result .btn:disabled { opacity: 0.45; cursor: default; }
+.recording__invoice { min-width: 0; max-width: 100%; }
+.recording__invoice pre { margin: 10px 0 0; color: var(--soft); font: 0.8rem/1.6 var(--mono); white-space: pre-wrap; }
+.recording__invoice summary { cursor: pointer; font-size: 0.875rem; }
+[data-recording-next] { margin-top: 8px; }
+
+@media (max-width: 760px) {
+  .demo__view[data-view="recording"] { grid-template-columns: minmax(0, 1fr); }
+}

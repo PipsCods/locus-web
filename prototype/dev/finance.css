@@ -1,0 +1,40 @@
+.finance { background: #101614; }
+.finance__top { border-bottom: 1px solid var(--line); }
+.finance__top .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-block: 17px; }
+.finance__top .label { color: var(--soft); font-size: 0.68rem; }
+.finance__main { padding-block: clamp(32px, 6vw, 76px) 64px; }
+.finance__title { display: grid; gap: 10px; margin-bottom: 26px; }
+.finance__title h1 { font-size: clamp(2.3rem, 5vw, 3.75rem); }
+.finance__title p, .finance__lookup { color: var(--soft); font-size: 0.875rem; }
+.finance__layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.finance__records, .finance__panel, .finance__panel form, .finance__result { display: grid; gap: 14px; }
+.finance__panel { min-width: 0; padding: clamp(18px, 3vw, 28px); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.finance__panel h2 { font-size: 1.25rem; }
+.finance__panel textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 90px;
+  padding: 12px;
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--black);
+  font: inherit;
+}
+.finance__panel .btn { width: fit-content; border: 0; cursor: pointer; }
+.finance__panel .btn:disabled { opacity: 0.55; }
+.finance__panel pre { margin: 0; color: var(--soft); white-space: pre-wrap; font: 0.8125rem/1.7 var(--mono); }
+.finance__result { gap: 8px; padding: 16px; border-left: 3px solid var(--error); background: var(--black); }
+.finance__result h3 { color: var(--error); font-size: 1.4rem; }
+.finance__result p { line-height: 1.55; }
+.finance__error { color: var(--error); }
+.finance__lookup:empty { display: none; }
+.finance__source summary { cursor: pointer; }
+.finance__source[open] summary { margin-bottom: 12px; }
+.finance__source dl { display: grid; gap: 6px; margin: 14px 0 0; }
+.finance__source dd { margin: 0 0 8px; color: var(--soft); }
+.finance [hidden] { display: none; }
+
+@media (max-width: 680px) {
+  .finance__layout { grid-template-columns: minmax(0, 1fr); }
+}

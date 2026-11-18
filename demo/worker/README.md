@@ -26,6 +26,15 @@ cron */5: sweep Vast instances, tunnels and DNS records named locus-demo-*; admi
 | `GET /api/demo/decide?token=…&action=approve\|reject` | Owner's one-click links from the review email (single use, 3 days). Approving still goes through the caps. |
 | `GET /api/demo/manual?key=…` | Phase 2 manual mode, see below. |
 
+The [recording workflow](../recording/README.md#local-booking-path) is available in
+loopback-only Wrangler when `RECORDING_TAKE_ID` is set.
+
+| Route | What it does |
+|---|---|
+| `GET /api/demo/recording/catalog` | Lists the server profiles and invoice workload. |
+| `POST /api/demo/recording/recommendation` | Takes `{profile, workload, key}` and returns the recommendation and preflight availability. |
+| `POST /api/demo/recording/start` | Takes the same body, checks availability again, and starts or resumes the armed take. Sets the normal session cookie for `status` and `chat`. |
+
 ## Safety rules (enforced in code)
 
 - **Hard gates first.** Free/disposable mailbox or no MX → rejected, model not called. Domain younger

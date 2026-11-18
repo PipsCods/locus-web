@@ -30,6 +30,7 @@ export function publicStatus(row, now = Date.now()) {
   if (!row) return { ok: true, status: "none" };
   let status = row.status === "pending_email" ? "none" : row.status;
   if (status === "ready" && row.ends_at && Date.parse(row.ends_at) <= now) status = "ended";
+  if (ACTIVE.includes(status) && Date.parse(row.recording_expires_at) <= now) status = "ended";
   const out = { ok: true, status };
   if (status === "checking") out.eta_minutes = 2;
   if (status === "booting") {
@@ -39,7 +40,9 @@ export function publicStatus(row, now = Date.now()) {
   }
   if (status === "ready" || status === "booting" || status === "ended") {
     if (row.ends_at) out.ends_at = new Date(row.ends_at).toISOString();
-    if (row.hw_cpu || row.hw_gpu) out.hardware = { cpu: row.hw_cpu ?? "", ram_gb: row.hw_ram_gb ?? 0, gpu: row.hw_gpu ?? "" };
+    if ((!row.recording_profile || row.vast_instance_id || status === "ended") && (row.hw_cpu || row.hw_gpu)) {
+      out.hardware = { cpu: row.hw_cpu ?? "", ram_gb: row.hw_ram_gb ?? 0, gpu: row.hw_gpu ?? "" };
+    }
     if (row.model) out.model = row.model;
   }
   return out;

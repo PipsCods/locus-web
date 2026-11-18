@@ -129,6 +129,12 @@ export function fakeCloudflare() {
   };
 }
 
+export const RECORDING_OFFER = {
+  id: 3, machine_id: 33, num_gpus: 1, gpu_name: "RTX 3090", cpu_name: "AMD Threadripper PRO 9995WX",
+  cpu_ram: 262_144, dph_total: 0.55, verification: "verified", rentable: true, rented: false, reliability: 0.999,
+  disk_space: 300, inet_down: 1500, cuda_max_good: 13, end_date: 4102444800,
+};
+
 let devState; // survives between requests inside one `wrangler dev` isolate
 export function devFakes(cfg) {
   if (!devState) {
@@ -138,7 +144,7 @@ export function devFakes(cfg) {
       turnstile: fakeTurnstile(),
       email: fakeEmail(),
       openai: fakeOpenAI(),
-      vast: fakeVast(),
+      vast: fakeVast(cfg.recording ? { offers: [RECORDING_OFFER] } : {}),
       cf: fakeCloudflare(),
     };
   }

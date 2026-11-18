@@ -55,6 +55,8 @@ Prices and models in `check-data.js` are from November 2026. Review them before 
 | `/demo?demo=ready` | The demo chat, against the pretend backend (dev only; the bar under the footer switches between the other states) |
 | `/demo?demo=ready&models=0` | The same chat as on a single-model box: no Auto / Deep / Fast picker |
 
+The [recording walkthrough](demo/recording/README.md) starts at [`/demo?recording=1`](http://127.0.0.1:5173/demo?recording=1) and runs locally with sample data.
+
 When you test the form locally, emails are saved in `prototype/.leads.dev.jsonl`. Git ignores this file.
 
 ## Cloudflare

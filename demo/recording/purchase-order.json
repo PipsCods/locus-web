@@ -1,0 +1,16 @@
+{
+  "purchase_order": {
+    "id": "PO-1842",
+    "supplier": "Kestrel Valve & Pump",
+    "item": "Valve assemblies",
+    "units": 100,
+    "unit_price_usd": 45
+  },
+  "goods_receipt": {
+    "id": "GR-1842",
+    "purchase_order_id": "PO-1842",
+    "item": "Valve assemblies",
+    "units": 100,
+    "unit_price_usd": 45
+  }
+}
