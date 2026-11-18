@@ -64,7 +64,7 @@ def one_request(host, port, key, messages, max_tokens, timeout):
     t0 = time.monotonic()
     ttft = None
     timings = None
-    out_chunks = 0
+    done = False
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
     try:
         conn.request("POST", "/v1/chat/completions", body, headers)
@@ -84,6 +84,7 @@ def one_request(host, port, key, messages, max_tokens, timeout):
                     continue
                 data = line[6:]
                 if data == b"[DONE]":
+                    done = True
                     continue
                 try:
                     j = json.loads(data)
@@ -92,8 +93,6 @@ def one_request(host, port, key, messages, max_tokens, timeout):
                 ch = (j.get("choices") or [{}])[0].get("delta") or {}
                 if ttft is None and (ch.get("content") or ch.get("reasoning_content")):
                     ttft = time.monotonic() - t0
-                if ch.get("content") or ch.get("reasoning_content"):
-                    out_chunks += 1
                 if j.get("timings"):
                     timings = j["timings"]
     except Exception as e:  # noqa: BLE001 - a failed request is a result, not a crash
@@ -102,14 +101,16 @@ def one_request(host, port, key, messages, max_tokens, timeout):
         conn.close()
     lat = time.monotonic() - t0
     t = timings or {}
+    if not done or ttft is None or not t.get("predicted_n") or not t.get("predicted_per_second"):
+        return {"ok": False, "error": "incomplete stream or missing generation timings", "latency_s": round(lat, 3)}
     return {
         "ok": True,
         "latency_s": round(lat, 3),
-        "ttft_s": round(ttft, 3) if ttft is not None else None,
+        "ttft_s": round(ttft, 3),
         "prompt_n": t.get("prompt_n"),
         "cache_n": t.get("cache_n"),
         "prompt_per_second": t.get("prompt_per_second"),
-        "predicted_n": t.get("predicted_n", out_chunks),
+        "predicted_n": t["predicted_n"],
         "predicted_per_second": t.get("predicted_per_second"),
     }
 
