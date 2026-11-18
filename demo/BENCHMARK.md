@@ -1,6 +1,6 @@
-# Qwen3.8-Flash-Next on one RTX 5090: benchmark
+# Qwen3.8-Flash-Next on one GPU
 
-Status: **run on 2026-11-16/17, passed.** Raw output of `bench.sh` is not in
+**RTX 5090 benchmark, 2026-11-16/17. Passed.** Raw output of `bench.sh` is not in
 the repo; the tables below are its `results.md`. How to run it:
 `demo/instance/README.md`.
 
@@ -196,3 +196,126 @@ content and `reasoning_content` arrive as separate deltas, the thinking switch
 (`enable_thinking`) works both ways, and the final chunk carries `timings`
 (55–58 t/s generation; the 2,204-token sample report was read at 457 t/s).
 The browser page itself was not driven against the real model.
+
+## RTX 3090 on a full-CPU EPYC 7302P offer
+
+Run on 2026-11-18. One RTX 3090 (24,576 MiB, PCIe 4.0 x16) on Vast offer
+60431240, instance 61259997. The listing allocated the entire GPU fraction
+and all 32 host threads to this rental. On the box, all 32 threads were in the
+CPU affinity mask, the CPU-time quota was 30.72 logical CPUs, and the
+container RAM limit was 259 GB. The host averaged 99.7% CPU idle before
+downloads. During one eight-second sample of 32k prefill, the host used about
+14.27 logical CPU-equivalents and the benchmark cgroup accounted for 14.24.
+A second eight-second sample during concurrency measured 13.91 on the host
+and 13.88 in the benchmark cgroup. DIMM population and memory speed were unavailable inside the container.
+
+Both runtimes used the same revisions as the 5090 run, ik `a6383da414f7`
+and mainline `ad5cbfa911b9`. The GGUF shards were from
+`unsloth/Qwen3.8-Flash-Next-GGUF` revision
+`f5d175de2cf7f720d45d6064019a81fcf056e986`. The 93.7 GB
+`UD-IQ4_XS` download took 361 s and the 111.3 GB `UD-Q4_K_XL` download took
+427 s. The benchmark used a 21,476 MiB loaded-VRAM target and tested
+15 and 7 threads.
+
+### Single-user throughput
+
+All 144 throughput requests completed. The table uses the smallest measured
+`-ncmoe` that fit the VRAM target for each quant and runtime. Rates are means
+of two runs with 15 threads and thinking off. All four 16k configurations
+passed the 20 tokens/s generation bar.
+
+| Quant | Runtime | CPU expert layers | Loaded VRAM (MiB) | 16k prefill t/s | 16k generation t/s | 32k prefill t/s | 32k generation t/s |
+|---|---|---:|---:|---:|---:|---:|---:|
+| UD-IQ4_XS | ik | 35 | 20,361 | 208.7 | 27.8 | 205.6 | 27.4 |
+| UD-IQ4_XS | mainline | 36 | 20,895 | 240.7 | 31.8 | 229.4 | 31.6 |
+| UD-Q4_K_XL | ik | 39 | 20,887 | 225.5 | 31.7 | 222.1 | 30.9 |
+| UD-Q4_K_XL | mainline | 40 | 20,531 | 183.5 | 31.8 | 173.7 | 31.1 |
+
+On `UD-IQ4_XS` at 16k, reducing `-t` from 15 to 7 brought generation to
+20.2 t/s on ik and 22.2 t/s on mainline. Moving another three expert layers to
+the CPU at 15 threads freed about 3 GiB on ik and 3.6 GiB on mainline.
+Generation remained at 26.7 and 30.6 t/s respectively.
+
+Both quants extracted the checked KPI figures and correctly summed segment
+revenue to EUR 184.6 million in the thinking-off spot checks. The larger quant
+also included order intake. Both marked several unstated changes as n/a.
+
+### Comparison with the 5090 serving run
+
+The table compares `UD-IQ4_XS` at 16k with thinking off. The mainline 5090
+entry comes from the corrected flag run above, which used one repeat. The
+other entries use two. The 3090 was tested on the EPYC 7302P described above,
+and the 5090 on an EPYC 7C13 slice. CPU, available memory, GPU and CPU expert
+layer count all differ across the two systems.
+
+| Serving configuration | Threads | CPU expert layers | Prefill t/s | Generation t/s |
+|---|---:|---:|---:|---:|
+| RTX 3090, ik | 15 | 35 | 208.7 | 27.8 |
+| RTX 5090, ik | 15 | 29 | 298.6 | 40.3 |
+| RTX 5090, ik | 30 | 29 | 510.6 | 49.9 |
+| RTX 3090, mainline | 15 | 36 | 240.7 | 31.8 |
+| RTX 5090, mainline | 30 | 30 | 334.5 | 55.4 |
+
+### Multi-user serving
+
+The concurrency suite used `UD-IQ4_XS`, 15 threads, and up to 256 output
+tokens per response with EOS ignored. Each of 1, 2, 4, and 8 users sent two
+requests in a closed loop. The workloads were short chat, a document with a
+different prefix per request, and a shared document with a reusable prefix.
+Aggregate throughput includes queue and prefill time. TTFT is time to first
+token. Each p95 describes a batch of at most 16 requests.
+
+Ten of the 13 server configurations completed all workloads without request
+failures. There were 1,080 attempted requests and 942 successes across the 12
+configurations that started. The table shows batches of eight users with zero
+failures. A dash marks a batch without a complete result.
+
+| Configuration | Chat t/s | Chat p95 TTFT s | Doc t/s | Doc p95 TTFT s | Shared-doc t/s | Shared-doc p95 TTFT s |
+|---|---:|---:|---:|---:|---:|---:|
+| ik-1slot | 30.6 | 59.2 | 18.0 | 106.0 | 18.7 | 102.0 |
+| ik-1slot-mtp | 31.9 | 57.5 | 19.2 | 101.0 | 21.8 | 84.9 |
+| ik-8slots | 40.3 | 8.0 | 16.2 | 85.3 | 29.5 | 29.1 |
+| ik-8slots-ub2048 | 40.4 | 8.1 | — | — | — | — |
+| ik-8slots-nocram | — | — | — | — | — | — |
+| ik-8slots-mtp | — | — | — | — | — | — |
+| mainline-1slot | 33.9 | 53.2 | 18.7 | 102.8 | 28.7 | 65.6 |
+| mainline-1slot-mtp | 34.1 | 52.8 | 20.0 | 97.0 | 30.3 | 62.6 |
+| mainline-8slots | 52.5 | 3.0 | 26.6 | 40.9 | 51.6 | 6.7 |
+| mainline-8slots-kvu | 52.1 | 3.2 | 26.5 | 40.5 | 35.7 | 28.2 |
+| mainline-8slots-ub2048 | 52.8 | 3.0 | 36.8 | 19.95 | 52.8 | 4.3 |
+| mainline-8slots-nocram | 53.0 | 2.9 | 25.7 | 45.1 | 38.1 | 25.0 |
+| mainline-8slots-mtp | 39.9 | 3.6 | 21.7 | 48.4 | 37.3 | 7.6 |
+
+These are the scaling results for the default mainline eight-slot configuration.
+
+| Users | Chat aggregate t/s | Chat mean decode t/s | Chat p95 TTFT s | Doc aggregate t/s | Doc p95 TTFT s | Shared-doc aggregate t/s | Shared-doc p95 TTFT s |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 33.1 | 36.0 | 0.7 | 18.3 | 7.1 | 21.2 | 7.3 |
+| 2 | 41.3 | 22.4 | 1.4 | 15.8 | 13.0 | 29.6 | 6.4 |
+| 4 | 48.2 | 12.9 | 2.0 | 17.0 | 25.8 | 35.9 | 11.2 |
+| 8 | 52.5 | 6.9 | 3.0 | 26.6 | 40.9 | 51.6 | 6.7 |
+
+- With mainline at eight slots, increasing the microbatch to 2048 raised
+  eight-user uncached document throughput from 26.6 to 36.8 t/s and reduced
+  p95 TTFT from 40.9 to 19.95 s. Shared-document p95 fell from 6.7 to 4.3 s.
+  Eight-user chat stayed near 53 aggregate t/s with about 7 t/s of decode
+  speed per active request.
+- Two ik variants exited with a CUDA illegal memory access. The larger
+  microbatch crashed during the four-user document batch, and disabling the
+  RAM cache crashed during the four-user chat batch. The 138 failed requests
+  include subsequent requests sent after those exits. The pinned ik build
+  also rejects MTP startup with parallel slots.
+- Mainline MTP with eight slots ran at `-ncmoe 40` after CUDA allocation failed
+  at 36 and 38. The tested MTP configuration delivered 39.9 aggregate t/s at
+  eight chat users, compared with 52.5 t/s at `-ncmoe 36` with MTP off.
+  Both the speculative decoding setting and expert placement differ.
+
+The historical 5090 comparison covers single-user serving.
+
+### Cost and cleanup
+
+The replacement took about 7 hours 31 minutes from rental to destruction and
+used $7.76 of Vast credit. Total spend across both attempts was $7.95.
+The first rental, 61256042, ended before model downloads after a script-mode
+failure in the resume path. The executable mode is fixed. Vast confirmed
+that both rentals were destroyed and the temporary SSH keys were removed.
