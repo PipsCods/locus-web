@@ -66,7 +66,7 @@ CONFIGS=(
 mtp_flags() {
   case "$1" in
     ik) echo "-md $MTP_HEAD --spec-type mtp:n_max=2,p_min=0.0" ;;
-    mainline) echo "-md ${MTP_HEAD_FULL:-$MTP_HEAD} --spec-type draft-mtp --spec-draft-n-max 2" ;;
+    mainline) echo "-md $MTP_HEAD_FULL --spec-type draft-mtp --spec-draft-n-max 2" ;;
   esac
 }
 
@@ -178,7 +178,7 @@ start_server() {
   deadline=$(( $(date +%s) + 600 ))
   while (( $(date +%s) < deadline )); do
     kill -0 "$SERVER_PID" 2>/dev/null || { wait "$SERVER_PID" 2>/dev/null || true; SERVER_PID=""; return 1; }
-    [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/health")" == 200 ]] && return 0
+    [[ "$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/health")" == 200 ]] && return 0
     sleep 2
   done
   stop_server
@@ -190,7 +190,14 @@ for spec in "${CONFIGS[@]}"; do
   IFS='|' read -r name rt slots extra <<<"$spec"
   if [[ -n "$ONLY" && " $ONLY " != *" $name "* ]]; then continue; fi
   if [[ "$extra" == MTP ]]; then
-    [[ -f "$MTP_HEAD" ]] || { log "$name: no --mtp-head, skipping"; continue; }
+    if [[ "$rt" == ik && ! -f "$MTP_HEAD" ]]; then
+      log "$name: no --mtp-head, skipping"
+      continue
+    fi
+    if [[ "$rt" == mainline && ! -f "$MTP_HEAD_FULL" ]]; then
+      log "$name: no --mtp-head-full, skipping"
+      continue
+    fi
     extra=$(mtp_flags "$rt")
   fi
   ncmoe=${NCMOE[$rt]:-}
@@ -220,7 +227,7 @@ for spec in "${CONFIGS[@]}"; do
     done
   done
   if [[ "$extra" == *spec-type* ]]; then
-    acc=$(grep -a "draft acceptance" "$OUT/logs/$name-n$n.log" | tail -n 1 | sed 's/.*draft acceptance/draft acceptance/' | cut -c1-120)
+    acc=$(sed -n 's/.*draft acceptance/draft acceptance/p' "$OUT/logs/$name-n$n.log" | tail -n 1 | cut -c1-120)
     log "$name: ${acc:-no draft acceptance line in the log: speculation may not have run}"
     jq -nc --arg c "$name" --arg a "${acc:-none}" '{type: "spec", config: $c, acceptance: $a}' >>"$OUT/results.jsonl"
   fi

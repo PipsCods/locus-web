@@ -6,8 +6,10 @@ search, the benchmark, and the demo start script.
 | File | Runs where | What |
 |---|---|---|
 | `Dockerfile` | build machine | CUDA 13.0 image with ik_llama.cpp and mainline llama.cpp (sm_120), cloudflared, `hf`, `vastai` |
-| `find-offer.sh` | your laptop | ranks 1x RTX 5090 offers, `--create` rents the best |
+| `find-offer.sh` | your laptop | ranks single-GPU offers (RTX 5090 by default), `--create` rents an offer |
 | `bench.sh` | rented machine | download + load timing, `-ncmoe`/threads sweep, prefill/generation speed, quality spot check |
+| `bench-3090.sh` | rented machine | full EPYC/3090 repeat with hardware checks, host and GPU telemetry, and a rental deadline |
+| `bench-concurrency.sh` | rented machine | closed-loop chat and document workloads at 1, 2, 4 and 8 simultaneous users |
 | `onstart.sh` | rented machine | demo start: self-destruct timer, tunnel, download, server |
 | `llama-wrapper.sh` | rented machine | `llama-server-ik`, `llama-server-mainline` (and `llama-bench-*`) |
 | `prompts/` | rented machine | spot-check prompts and the synthetic report they use |
@@ -33,8 +35,8 @@ to `find-offer.sh`.
 
 ## Run the benchmark end to end
 
-Cost: about 4 to 5 hours of machine time for three quants and two runtimes,
-so roughly $5 to $14 depending on the offer.
+Estimate cost from the current offer's hourly rate, storage and bandwidth.
+The two full quants total about 205 GB before MTP heads and setup downloads.
 
 ```sh
 pip install vastai            # and jq
@@ -72,7 +74,8 @@ has >= 190 GB RAM):
 
 1. `hf download` with Xet high-performance mode, timed.
 2. Per runtime, a binary search over server loads for the smallest `-ncmoe`
-   that keeps VRAM under 29.5 GB (`--vram-target`), each load timed.
+   that keeps loaded VRAM within the GPU's capacity minus 3100 MiB
+   (override with `--vram-target`), each load timed.
 3. Configs: that `-ncmoe` with threads = physical cores of the slice and half
    of that, plus `-ncmoe`+3 at full threads.
 4. Per config: prompts of ~60, 16k and 32k tokens, thinking off and low,
@@ -87,11 +90,58 @@ Outputs in `/workspace/bench/<timestamp>/`: `results.jsonl` (one object per
 download, probe, load, request, quality answer), `results.md`,
 `hardware.json` / `hardware.txt`, `logs/` (server logs, raw responses).
 `bench.sh --summarize DIR` rebuilds `results.md`. If a 32k request runs out
-of VRAM, rerun with `--vram-target 28500`. Extra server flags for one runtime:
+of VRAM, rerun in a new directory with a lower `--vram-target` in MiB.
+Extra server flags for one runtime:
 `IK_EXTRA="-ub 2048 -b 2048" bench.sh ...`.
 
 Memory speed and channel count come from `dmidecode`, which most containers
 cannot read; `hardware.json` then says so. The Vast offer page lists them.
+
+## Repeat on a full-CPU EPYC host with one RTX 3090
+
+Set `VAST_API_KEY` from the benchmark account's protected local key file in
+the shell running Vast commands. The CLI uses it ahead of its saved key.
+Register the workstation's SSH public key with that account before renting.
+
+```sh
+demo/instance/find-offer.sh --gpu 'RTX 3090' --full-cpu --server-cpu-only --min-ram 190 --json
+```
+
+Choose an EPYC offer and record its CPU, RAM, PCIe and bandwidth metadata.
+`--full-cpu` checks CPU allocation in the offer. Confirm the host's tenancy
+details separately when available, since CPU allocation alone cannot establish
+exclusive use of memory bandwidth. After rental approval, repeat the search
+flags with `--create --offer <id> --max-dph <approved-rate> --image
+nvidia/cuda:13.0.3-devel-ubuntu24.04`. Record an absolute deadline at rental
+time and keep a workstation-side cleanup timer for the interval before SSH
+is available.
+
+Copy `demo/instance` to `/opt/locus` and run the benchmark in a detached SSH
+session, for example in tmux if it is available:
+
+```sh
+nohup /opt/locus/bench-3090.sh DEADLINE_EPOCH /workspace/bench/3090 \
+  >/var/log/locus-bench-3090.log 2>&1 </dev/null &
+```
+
+The runner arms the container's self-destruct before setup, then checks the
+CPU allocation, RAM, GPU and host activity before downloading the quants.
+It requires affinity to every host CPU and records the exact CPU-time quota,
+allowing up to 5% for host overhead on a full-GPU offer. Pass
+`--reuse-build` after the results directory to resume on the same machine
+with the runtimes already installed by `setup-on-box.sh`. The preflight
+requires at least 90% CPU idle over a ten-second sample and records host and
+GPU telemetry during both suites. The full suite uses the pinned runtimes and
+both quants. The concurrency suite reuses the `UD-IQ4_XS` fit from each runtime
+and its matching MTP head. Its aggregate rate uses wall-clock time, including
+queue and prefill. Its per-user rate is the mean request decode speed.
+
+Copy the run directory off the instance as each phase finishes and before the
+deadline. Destroy the instance immediately after collecting the results and
+verify it is gone with `vastai show instances`. Record the 16k thinking-off
+baseline against the original 20 t/s pass bar and report the concurrency
+results, request failures and host activity alongside it in
+[`../BENCHMARK.md`](../BENCHMARK.md).
 
 ## Demo machine: env contract
 

@@ -61,7 +61,7 @@ QUICK=0
 HW_ONLY=0
 SUMMARIZE_ONLY=""
 
-PORT=8090
+NEXT_PORT=8090
 CTX_SIZE=40960          # room for a 32k prompt plus thinking
 LOAD_TIMEOUT=1800
 REQUEST_TIMEOUT=1800
@@ -205,24 +205,18 @@ log "results in $OUT"
 
 lscpu_field() { lscpu | awk -F: -v k="$1" '$1 == k { sub(/^[ \t]+/, "", $2); print $2; exit }'; }
 
-# CPUs this container may use: cgroup v2 cpu.max, then v1 CFS quota, then cpuset.
-slice_cpus() {
+# CPU-time quota in logical CPUs, which can be fractional even with full affinity.
+cpu_quota() {
   local q p
   if [[ -r /sys/fs/cgroup/cpu.max ]]; then
     read -r q p </sys/fs/cgroup/cpu.max
-    if [[ "$q" != max ]]; then
-      awk -v q="$q" -v p="$p" 'BEGIN { printf "%d quota\n", q / p }'
-      return
-    fi
   elif [[ -r /sys/fs/cgroup/cpu/cpu.cfs_quota_us ]]; then
     q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us)
     p=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us)
-    if [[ "$q" -gt 0 ]]; then
-      awk -v q="$q" -v p="$p" 'BEGIN { printf "%d quota\n", q / p }'
-      return
-    fi
   fi
-  echo "$(nproc) cpuset"
+  if [[ "${q:-}" =~ ^[0-9]+$ ]] && (( q > 0 )); then
+    awk -v q="$q" -v p="$p" 'BEGIN { print q / p }'
+  fi
 }
 
 # Memory limit of this container in bytes (or the host total if unlimited).
@@ -266,8 +260,15 @@ memory_desc() {
 }
 
 record_hardware() {
-  local cpus src threads_per_core phys gpu ik_variant
-  read -r cpus src < <(slice_cpus)
+  local cpus src affinity quota threads_per_core phys gpu ik_variant
+  affinity=$(nproc)
+  quota=$(cpu_quota)
+  cpus=$affinity
+  src=cpuset
+  if [[ -n "$quota" ]] && (( ${quota%.*} < affinity )); then
+    cpus=${quota%.*}
+    src=quota
+  fi
   threads_per_core=$(lscpu_field "Thread(s) per core")
   threads_per_core=${threads_per_core:-1}
   phys=$(( cpus / threads_per_core ))
@@ -287,6 +288,7 @@ record_hardware() {
     --arg numa "$(lscpu_field 'NUMA node(s)')" \
     --arg l3 "$(lscpu_field 'L3 cache')" \
     --arg slice_cpus "$cpus" --arg cpu_limit_source "$src" \
+    --argjson cpu_affinity_threads "$affinity" --argjson cpu_quota_threads "${quota:-null}" \
     --arg physical_cores "$phys" \
     --arg avx512 "$(grep -qw avx512f /proc/cpuinfo && echo yes || echo no)" \
     --arg ik_variant "$ik_variant" \
@@ -389,6 +391,8 @@ runtime_flags() {
 start_server() {
   local rt=$1 model=$2 ncmoe=$3 threads=$4 logf=$5 t0 flags
   stop_server
+  PORT=$NEXT_PORT
+  NEXT_PORT=$(( NEXT_PORT + 1 ))
   read -r -a flags <<<"$(runtime_flags "$rt")"
   t0=$(now)
   "llama-server-$rt" -m "$model" \
@@ -405,7 +409,7 @@ start_server() {
       LOAD_S=$(elapsed "$t0")
       return 1
     fi
-    if [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/health")" == 200 ]]; then
+    if [[ "$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/health")" == 200 ]]; then
       LOAD_S=$(elapsed "$t0")
       return 0
     fi
@@ -553,7 +557,7 @@ run_config() {
 # layers = less VRAM, so this is monotone; binary search over [0, N_LAYERS].
 # Sets FILL (not echoed: a $(...) subshell would lose SERVER_PID and die()).
 find_fill_ncmoe() {
-  local q=$1 rt=$2 model=$3 threads=$4 lo=0 hi=$N_LAYERS mid vram ok
+  local q=$1 rt=$2 model=$3 threads=$4 lo=0 hi=$(( N_LAYERS + 1 )) mid vram ok
   while (( lo < hi )); do
     mid=$(( (lo + hi) / 2 ))
     ok=false
@@ -568,6 +572,7 @@ find_fill_ncmoe() {
     log "probe $rt -ncmoe $mid: VRAM ${vram} MiB, load ${LOAD_S}s, fits=$ok"
     if [[ "$ok" == true ]]; then hi=$mid; else lo=$(( mid + 1 )); fi
   done
+  (( lo <= N_LAYERS )) || die "no -ncmoe fits the ${VRAM_TARGET} MiB VRAM target for $q/$rt"
   FILL=$lo
 }
 

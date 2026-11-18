@@ -70,9 +70,10 @@ destroy_now() {
       log "vastai destroy failed: $out"
     fi
     # Fallback: the REST call the CLI makes.
-    curl -fsS -X DELETE -H "Authorization: Bearer $CONTAINER_API_KEY" \
-      "https://console.vast.ai/api/v0/instances/$CONTAINER_ID/" >/dev/null 2>&1 \
-      && log "REST destroy accepted"
+    if curl -fsS --max-time 15 -X DELETE -H "Authorization: Bearer $CONTAINER_API_KEY" \
+      "https://console.vast.ai/api/v0/instances/$CONTAINER_ID/" >/dev/null 2>&1; then
+      log "REST destroy accepted"
+    fi
     # If either worked, the container is torn down around us; otherwise retry.
     sleep 30
   done

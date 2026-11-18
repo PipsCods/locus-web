@@ -32,6 +32,7 @@
 #   --top-ram GB         preferred RAM tier (default 192)
 #   --max-dph USD        price cap per hour, total incl. storage (default 3.00)
 #   --server-cpu-only    drop non-EPYC/Xeon/Threadripper offers instead of ranking them lower
+#   --full-cpu           require the offer's effective CPU count to equal the host count
 #   --offer ID           with --create: rent this offer id instead of the top one
 #   --limit N            rows to print (default 15)
 #   --json               print the ranked offers as JSON instead of a table
@@ -49,6 +50,7 @@ MIN_RAM=128
 TOP_RAM=192
 MAX_DPH=3.00
 SERVER_ONLY=0
+FULL_CPU=0
 OFFER_ID=""
 LIMIT=15
 JSON=0
@@ -70,6 +72,7 @@ while [[ $# -gt 0 ]]; do
     --top-ram) TOP_RAM=${2:?}; shift ;;
     --max-dph) MAX_DPH=${2:?}; shift ;;
     --server-cpu-only) SERVER_ONLY=1 ;;
+    --full-cpu) FULL_CPU=1 ;;
     --offer) OFFER_ID=${2:?}; shift ;;
     --limit) LIMIT=${2:?}; shift ;;
     --json) JSON=1 ;;
@@ -82,11 +85,6 @@ done
 command -v vastai >/dev/null || die "vastai CLI not found (pip install vastai)"
 command -v jq >/dev/null || die "jq not found"
 
-api_key_args=()
-if [[ -n "${VAST_API_KEY:-}" ]]; then
-  api_key_args=(--api-key "$VAST_API_KEY")
-fi
-
 # Server-side filters. Syntax checked against vastai 1.11.0 (vastai/api/query.py):
 # string values use _ for spaces; cpu_ram is given in GB (the CLI multiplies by
 # 1000, raw results are in MB); cuda_vers is an alias of cuda_max_good;
@@ -98,10 +96,10 @@ query+=" reliability>0.99 inet_down>=1000 disk_space>=${DISK}"
 query+=" cpu_ram>=${MIN_RAM} cuda_vers>=${MIN_CUDA} dph<=${MAX_DPH}"
 
 echo "query: $query" >&2
-raw=$(vastai search offers "$query" --type on-demand --storage "$DISK" --order 'dph_total' --raw "${api_key_args[@]}") \
+raw=$(vastai search offers "$query" --type on-demand --storage "$DISK" --order 'dph_total' --raw) \
   || die "vastai search offers failed"
 
-ranked=$(jq --argjson top "$TOP_RAM" --argjson server_only "$SERVER_ONLY" '
+ranked=$(jq --argjson top "$TOP_RAM" --argjson server_only "$SERVER_ONLY" --argjson full_cpu "$FULL_CPU" '
   def server_cpu: (.cpu_name // "") | test("EPYC|Xeon|Threadripper"; "i");
   def ddr5_cpu: (.cpu_name // "")
     | test("EPYC 9[0-9A-Z]{3}|Xeon.*(Platinum|Gold|Silver) [3-9][4-9][0-9]{2}|Xeon 6[0-9]{3}|Threadripper.*(PRO )?[79][0-9]{3}"; "i");
@@ -113,13 +111,14 @@ ranked=$(jq --argjson top "$TOP_RAM" --argjson server_only "$SERVER_ONLY" '
         ddr5: ddr5_cpu
       }
     | select($server_only == 0 or .server)
+    | select($full_cpu == 0 or ((.cpu_cores // 0) > 0 and .cpu_cores_effective == .cpu_cores))
   ]
   | sort_by(.tier, (if .server then 0 else 1 end), (if .ddr5 then 0 else 1 end),
           -(.cpu_cores_effective // 0), (.dph_total // 99))
 ' <<<"$raw")
 
 count=$(jq 'length' <<<"$ranked")
-[[ "$count" -gt 0 ]] || die "no offers match (try --max-dph, --min-ram, or drop --server-cpu-only)"
+[[ "$count" -gt 0 ]] || die "no offers match the requested filters"
 
 if [[ "$JSON" -eq 1 ]]; then
   jq --argjson n "$LIMIT" '.[:$n]' <<<"$ranked"
@@ -154,6 +153,8 @@ fi
 if [[ -z "$OFFER_ID" ]]; then
   OFFER_ID=$(jq -r '.[0].id' <<<"$ranked")
 fi
+jq -e --arg id "$OFFER_ID" 'any(.[]; (.id | tostring) == $id)' <<<"$ranked" >/dev/null \
+  || die "offer $OFFER_ID is unavailable or fails the requested filters"
 LABEL=${LABEL:-locus-bench-$(date -u +%Y%m%d-%H%M%S)}
 
 create=(vastai create instance "$OFFER_ID"
@@ -175,7 +176,7 @@ if [[ -n "${HF_TOKEN:-}" ]]; then
 fi
 
 echo "renting offer $OFFER_ID as '$LABEL' ..." >&2
-out=$("${create[@]}" "${api_key_args[@]}") || die "create instance failed: $out"
+out=$("${create[@]}") || die "create instance failed: $out"
 echo "$out"
 id=$(jq -r '.new_contract // empty' <<<"$out" 2>/dev/null || true)
 if [[ -n "$id" ]]; then
@@ -185,4 +186,6 @@ instance $id created. Next:
   vastai ssh-url $id                  # ssh in, then: bench.sh --help
   vastai destroy instance $id -y      # when done; then: vastai show instances
 EOF
+else
+  die "Vast did not return an instance ID"
 fi
