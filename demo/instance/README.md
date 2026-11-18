@@ -10,7 +10,10 @@ search, the benchmark, and the demo start script.
 | `bench.sh` | rented machine | download + load timing, `-ncmoe`/threads sweep, prefill/generation speed, quality spot check |
 | `onstart.sh` | rented machine | demo start: self-destruct timer, tunnel, download, server |
 | `llama-wrapper.sh` | rented machine | `llama-server-ik`, `llama-server-mainline` (and `llama-bench-*`) |
-| `prompts/` | rented machine | spot-check prompts and the synthetic report they use |
+| `bench-tiered.sh` | rented machine | two-tier benchmark (deep + fast server behind `router.py`), phases A-C below |
+| `sampler.sh` | rented machine | 1 s JSONL time series of GPUs, CPU, server `/metrics` and `/router/stats` |
+| `score_tasks.py` | anywhere | scores answers to `prompts/tiered-tasks.jsonl`; CLI prints accuracy by label and tier |
+| `prompts/` | rented machine | spot-check prompts, the synthetic report they use, and the labelled tiered task set |
 
 ## Build and push the image
 
@@ -92,6 +95,57 @@ of VRAM, rerun with `--vram-target 28500`. Extra server flags for one runtime:
 
 Memory speed and channel count come from `dmidecode`, which most containers
 cannot read; `hardware.json` then says so. The Vast offer page lists them.
+
+## Tiered benchmark (2 GPUs)
+
+`bench-tiered.sh` measures the two-tier box: `deep` (Flash-Next, ik, GPU0,
+experts on CPU) and `fast` (Qwen3.8-27B, mainline, GPU1) behind `router.py`.
+It starts and stops the servers itself on ports 8081/8082 and the router on
+8080 (`--port-base` moves all three), so stop the demo servers first. It
+needs `loadgen.py` with the tiered options (`--model`, `--policy`,
+`--workload tasks`, `--arrival poisson`) and `router.py` next to it.
+
+```sh
+bench-tiered.sh --deep-model /workspace/models/<deep shard 1>.gguf --deep-ncmoe <fill> \
+  --fast-model /workspace/models/<27B>.gguf --dph 0.85 2>&1 | tee /workspace/tiered.log
+#   smoke pass first: add --quick; one phase: --phases "B"
+bench-tiered.sh --summarize /workspace/bench/tiered-<timestamp>   # rebuild results.md
+```
+
+Phases (`--phases`, default all, in this order):
+
+| Phase | What |
+|---|---|
+| A1 | deep alone, `ik-1slot` / `ik-8slots`, same method as the 1-GPU concurrency run |
+| A2 | fast alone: 1/4/8/16 slots, `-ts` spill to GPU0, KV `q8_0` |
+| A3 | both up: load one, then both at once; pinned vs unpinned; VRAM reserve on GPU0 (`--reserve-specs`) |
+| Q | every task on each tier, thinking off and on: accuracy by difficulty, and the oracle (cheapest tier that is right) |
+| B | through the router: each policy (`--policies`) x users x workloads, plus the task mix (`--mix`) |
+| C1 | hard share 0 to 100% in steps of 20, at 8 and 16 users |
+| C2 | Poisson arrivals, rate sweep per policy until TTFT p95 > 10 s |
+| C3 | hard-heavy burst (80% hard), spill on vs off |
+| C4 | long-document flood (the six long-doc tasks) |
+| C5 | deep alone vs deep while fast is loaded, unpinned vs pinned |
+| C6 | kill one backend mid-run (`--c6-kill`): failed requests and time to re-route |
+| C7 | router overhead: direct vs via the router, 1 and 32 users |
+
+Outputs in `/workspace/bench/tiered-<timestamp>/`, laid out like the
+concurrency run: `results.jsonl` (one `{type: "run", phase, config, label,
+deep, fast, router, s: <loadgen summary>}` per run, plus `hardware`,
+`start_failed` and `run_failed` lines), `results.md` (one table per phase
+with the concurrency columns plus tier, accuracy, goodput, spills and $/1M
+output tokens from `--dph`; the Q and router-vs-oracle tables),
+`hardware.json` / `hardware.txt` (both GPUs, `nvidia-smi topo -m`, CPU
+slice, RAM), and `logs/` (server and router logs, the router's decision
+log, each run's loadgen JSON and its `*.timeseries.jsonl` from `sampler.sh`).
+
+Accuracy of any task run: `score_tasks.py logs/<run>.json --tasks
+prompts/tiered-tasks.jsonl`. Tests, run in this folder:
+
+```sh
+python3 -m unittest test_score_tasks test_router
+for f in *.sh; do bash -n "$f"; done; shellcheck bench-tiered.sh sampler.sh
+```
 
 ## Demo machine: env contract
 
