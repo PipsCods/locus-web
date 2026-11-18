@@ -192,7 +192,7 @@ because the Worker's env string cannot carry them.
 | `<N>_ARGS` | no | as `LLAMA_ARGS`, appended last |
 | `<N>_GPUS` | no | `CUDA_VISIBLE_DEVICES` for this server, e.g. `0`, or `1,0` with `-ts` to spill layers onto GPU 0. Indices follow `nvidia-smi` (`CUDA_DEVICE_ORDER=PCI_BUS_ID` is always set) |
 | `<N>_CPUS` | no | `taskset -c` core list, e.g. `0-27` |
-| `<N>_ALIAS` | no | `--alias`: the model name in the streamed chunks, e.g. `Qwen3.8-Flash-Next` |
+| `<N>_ALIAS` | no | `--alias`: the model name in the streamed chunks, e.g. `Qwen3.8-Flash-Next` (also given to the router, which enforces it: ik ignores the flag) |
 | `ROUTER_POLICY` | no | default `difficulty+spill` (see [Router](#router-tiered-mode)) |
 | `ROUTER_DEFAULT` | no | tier for requests without `model`, default `deep` |
 | `ROUTER_JUDGE` | no | `none` (default) or `fast` |
@@ -247,6 +247,9 @@ python3 router.py --port 8080 --key-file /run/locus/api-key \
 ```
 
 `--backend` is `NAME=PORT:SLOTS:CTX_PER_SLOT`; names are `deep` and `fast`.
+`--alias NAME=MODEL_NAME` (repeatable; `onstart.sh` passes `<N>_ALIAS`)
+rewrites the top-level `model` of that tier's answers, streamed or not:
+ik_llama.cpp ignores llama-server's `--alias` and sends the GGUF file name.
 The request's `model` picks the tier: `deep`, `fast`, or `auto` (absent means
 `--default`). For `auto`, unhealthy tiers and tiers whose per-slot context
 cannot hold the prompt (chars / 3.5) plus `max_tokens` are dropped first, then

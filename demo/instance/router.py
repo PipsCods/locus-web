@@ -29,7 +29,11 @@ Stdlib only:
   python3 router.py --port 8080 --key-file /run/locus/api-key \\
     --backend deep=8081:4:32768 --backend fast=8082:8:16384 \\
     --policy difficulty+spill --default deep [--judge none|fast] \\
+    [--alias deep=Qwen3.8-Flash-Next --alias fast=Qwen3.8-27B] \\
     [--log /var/lib/locus/router.jsonl] [--host 127.0.0.1]
+With --alias, the top-level "model" of every answer from that tier (each
+streamed chunk, or the JSON body) is rewritten to the alias: ik_llama.cpp
+ignores llama-server's --alias and sends the GGUF file name.
 """
 
 import argparse
@@ -101,6 +105,52 @@ CUES = {
     "analyse": r"\banaly[sz]|\bevaluat|\bassess|\bimplication|\broot cause\b|\bcritique\b",
 }
 CUE_RES = {k: re.compile(v, re.I) for k, v in CUES.items()}
+
+
+# ---------------------------------------------------------------------------
+# Model-name rewriting (--alias)
+# ---------------------------------------------------------------------------
+
+def with_model(data, alias):
+    """JSON bytes with a top-level "model" set to alias; anything else unchanged."""
+    try:
+        obj = json.loads(data)
+    except ValueError:
+        return data
+    if not isinstance(obj, dict) or "model" not in obj or obj["model"] == alias:
+        return data
+    obj["model"] = alias
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode()
+
+
+class SSEModelRewriter:
+    """Rewrites "model" in the data: lines of an event stream fed in arbitrary
+    pieces. feed() returns the complete lines seen so far; flush() the rest."""
+
+    def __init__(self, alias):
+        self.alias = alias
+        self.buf = b""
+
+    def line(self, raw):
+        body, cr = (raw[:-1], b"\r") if raw.endswith(b"\r") else (raw, b"")
+        if body.startswith(b"data:"):
+            payload = body[5:].strip()
+            if payload and payload != b"[DONE]":
+                new = with_model(payload, self.alias)
+                if new is not payload:
+                    return b"data: " + new + cr
+        return raw
+
+    def feed(self, chunk):
+        self.buf += chunk
+        head, sep, self.buf = self.buf.rpartition(b"\n")
+        if not sep:   # no newline yet: rpartition left everything in self.buf
+            return b""
+        return b"\n".join(self.line(x) for x in head.split(b"\n")) + b"\n"
+
+    def flush(self):
+        rest, self.buf = self.buf, b""
+        return self.line(rest) if rest else b""
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +300,9 @@ def choose(policy, sc, need_tokens, tiers, healthy, inflight, rng=random.random)
 class Router:
     def __init__(self, backends, key, policy="difficulty+spill", default="deep", judge="none",
                  log_path=None, backend_host="127.0.0.1", health_interval=HEALTH_INTERVAL_S,
-                 judge_timeout=JUDGE_TIMEOUT_S):
+                 judge_timeout=JUDGE_TIMEOUT_S, aliases=None):
         self.tiers = backends            # {name: {"port", "slots", "ctx"}}
+        self.aliases = dict(aliases or {})   # {name: model name to report}
         self.key = key
         self.policy = parse_policy(policy)
         self.default = default
@@ -545,6 +596,17 @@ def make_handler(router):
                     self.error(502, f"backend {tier} unreachable: {type(e).__name__}", "upstream_error", tag)
                     return 502, None
 
+                alias = router.aliases.get(tier)
+                ctype = (resp.getheader("Content-Type") or "").lower()
+                sse = SSEModelRewriter(alias) if alias and "text/event-stream" in ctype else None
+                whole = None
+                if alias and sse is None and "json" in ctype:
+                    try:
+                        whole = with_model(resp.read(), alias)
+                    except (OSError, http.client.HTTPException):
+                        self.error(502, f"backend {tier} failed mid-answer", "upstream_error", tag)
+                        return 502, None
+
                 self.send_response(resp.status)
                 for k, v in resp.getheaders():
                     if k.lower() not in HOP_BY_HOP:
@@ -552,7 +614,9 @@ def make_handler(router):
                 for k, v in tag.items():
                     self.send_header(k, v)
                 length = resp.getheader("Content-Length")
-                chunked = length is None
+                if whole is not None:
+                    length = str(len(whole))
+                chunked = length is None or sse is not None
                 if chunked:
                     self.send_header("Transfer-Encoding", "chunked")
                 else:
@@ -561,6 +625,9 @@ def make_handler(router):
                 self.send_header("X-Accel-Buffering", "no")
                 self.end_headers()
 
+                if whole is not None:
+                    self.write(whole)
+                    return resp.status, round(time.monotonic() - t_start, 4)
                 ttft = None
                 while True:
                     try:
@@ -572,7 +639,14 @@ def make_handler(router):
                             self.write(b"0\r\n\r\n")
                         return 502, ttft
                     if not chunk:
+                        chunk = sse.flush() if sse else b""
+                        if chunk:
+                            self.write(b"%x\r\n%s\r\n" % (len(chunk), chunk))
                         break
+                    if sse:
+                        chunk = sse.feed(chunk)
+                        if not chunk:
+                            continue
                     if ttft is None:
                         ttft = round(time.monotonic() - t_start, 4)
                     self.write(b"%x\r\n%s\r\n" % (len(chunk), chunk) if chunked else chunk)
@@ -603,8 +677,20 @@ def parse_backend(spec):
     return name, {"port": port, "slots": max(1, slots), "ctx": ctx}
 
 
+def parse_alias(spec):
+    """NAME=MODEL_NAME -> (name, model name)."""
+    name, sep, alias = spec.partition("=")
+    if not sep or name not in TIERS or not alias.strip():
+        raise argparse.ArgumentTypeError(f"alias must be NAME=MODEL_NAME with NAME one of {', '.join(TIERS)}, got {spec!r}")
+    return name, alias.strip()
+
+
 def build(args):
     backends = dict(args.backend)
+    aliases = dict(args.alias or [])
+    for name in aliases:
+        if name not in backends:
+            raise SystemExit(f"router: --alias {name} is not a backend")
     if len(backends) != len(args.backend):
         raise SystemExit("router: duplicate --backend name")
     if args.default != "auto" and args.default not in backends:
@@ -617,7 +703,7 @@ def build(args):
         raise SystemExit("router: key file is empty")
     try:
         router = Router(backends, key, policy=args.policy, default=args.default, judge=args.judge,
-                        log_path=args.log, health_interval=args.health_interval)
+                        log_path=args.log, health_interval=args.health_interval, aliases=aliases)
     except ValueError as e:
         raise SystemExit(f"router: {e}")
     return router
@@ -630,6 +716,8 @@ def main(argv=None):
     ap.add_argument("--key-file", required=True)
     ap.add_argument("--backend", type=parse_backend, action="append", required=True,
                     help="NAME=PORT:SLOTS:CTX_PER_SLOT, e.g. deep=8081:4:32768 (repeat)")
+    ap.add_argument("--alias", type=parse_alias, action="append",
+                    help="NAME=MODEL_NAME: report this model name in that tier's answers (repeat)")
     ap.add_argument("--policy", default="difficulty+spill")
     ap.add_argument("--default", default="deep", help="tier for requests without model (deep|fast|auto)")
     ap.add_argument("--judge", default="none", choices=["none", "fast"])

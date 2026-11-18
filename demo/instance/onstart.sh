@@ -377,6 +377,8 @@ for s in "${!srv_name[@]}"; do
     [[ -z "${srv_alias[s]}" ]] || tier_args+=(--alias "${srv_alias[s]}")
     logf=$STATE_DIR/server-${srv_name[s]}.log
     backend_specs+=(--backend "${srv_name[s]}=$port:${srv_slots[s]}:${srv_ctx[s]}")
+    # ik ignores --alias in its answers; the router rewrites the model name
+    [[ -z "${srv_alias[s]}" ]] || backend_specs+=(--alias "${srv_name[s]}=${srv_alias[s]}")
   else
     port=$PORT
     args_name=LLAMA_ARGS

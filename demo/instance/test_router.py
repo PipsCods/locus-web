@@ -60,7 +60,7 @@ class FakeBackend:
                     return
                 if not body.get("stream"):
                     time.sleep(fake.judge_delay)
-                    data = json.dumps({"choices": [{"message": {"content": fake.judge}}]}).encode()
+                    data = json.dumps({"model": fake.name, "choices": [{"message": {"content": fake.judge}}]}).encode()
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.send_header("Content-Length", str(len(data)))
@@ -101,14 +101,14 @@ class FakeBackend:
 
 class RouterHarness:
     def __init__(self, deep, fast, policy="difficulty+spill", default="deep", judge="none",
-                 slots=(4, 8), ctx=(32768, 16384), judge_timeout=R.JUDGE_TIMEOUT_S):
+                 slots=(4, 8), ctx=(32768, 16384), judge_timeout=R.JUDGE_TIMEOUT_S, aliases=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.log = os.path.join(self.tmp.name, "router.jsonl")
         self.router = R.Router(
             {"deep": {"port": deep.port, "slots": slots[0], "ctx": ctx[0]},
              "fast": {"port": fast.port, "slots": slots[1], "ctx": ctx[1]}},
             KEY, policy=policy, default=default, judge=judge, log_path=self.log,
-            health_interval=0.05, judge_timeout=judge_timeout)
+            health_interval=0.05, judge_timeout=judge_timeout, aliases=aliases)
         self.router.check_health()
         threading.Thread(target=self.router.health_loop, daemon=True).start()
         self.server = R.Server(("127.0.0.1", 0), R.make_handler(self.router))
@@ -486,6 +486,54 @@ class JudgeTests(unittest.TestCase):
         self.assertIsNone(line["features"]["judge"])
         self.assertGreaterEqual(line["judge_ms"], 150)
         self.assertEqual(self.h.router.stats()["judge_calls"], 1)
+
+
+class AliasTests(unittest.TestCase):
+    def test_with_model(self):
+        self.assertEqual(json.loads(R.with_model(b'{"model":"x.gguf","a":1}', "Deep")), {"model": "Deep", "a": 1})
+        for same in (b'not json', b'[1]', b'{"a":1}'):
+            self.assertIs(R.with_model(same, "Deep"), same)
+
+    def test_sse_rewriter_split_anywhere(self):
+        stream = (b'data: {"model":"f.gguf","choices":[{"delta":{"content":"model: \\"x\\""}}]}\r\n\r\n'
+                  b': keep-alive\n\ndata: {"model":"f.gguf","choices":[]}\n\ndata: [DONE]\n\n')
+        for cut in range(1, len(stream)):
+            w = R.SSEModelRewriter("Deep")
+            out = w.feed(stream[:cut]) + w.feed(stream[cut:]) + w.flush()
+            lines = out.split(b"\n")
+            datas = [json.loads(x[5:].strip()) for x in lines if x.startswith(b"data:") and b"[DONE]" not in x]
+            self.assertEqual([d["model"] for d in datas], ["Deep", "Deep"])
+            self.assertEqual(datas[0]["choices"][0]["delta"]["content"], 'model: "x"')
+            self.assertIn(b": keep-alive", out)
+            self.assertIn(b"data: [DONE]", out)
+            self.assertTrue(lines[0].endswith(b"\r"))
+
+    def test_router_rewrites_streamed_and_json_answers(self):
+        deep = FakeBackend("deep.gguf", words=("Deep", " answer"))
+        fast = FakeBackend("fast.gguf")
+        h = RouterHarness(deep, fast, aliases={"deep": "Qwen3.8-Flash-Next"})
+        try:
+            r, data = h.chat({"model": "deep"})
+            models = {json.loads(x[6:])["model"] for x in data.decode().splitlines()
+                      if x.startswith("data: ") and x != "data: [DONE]"}
+            self.assertEqual(models, {"Qwen3.8-Flash-Next"})
+            self.assertEqual(sse_text(data), "Deep answer")
+            r, data = h.request("POST", "/v1/chat/completions", {"model": "deep", "messages": [{"role": "user", "content": "x"}]})
+            self.assertEqual(r.status, 200)
+            self.assertEqual(json.loads(data)["model"], "Qwen3.8-Flash-Next")
+            self.assertEqual(int(r.getheader("Content-Length")), len(data))
+            r, data = h.chat({"model": "fast"})   # no alias for fast: unchanged
+            self.assertIn('"model": "fast.gguf"', data.decode())
+        finally:
+            h.close()
+            deep.stop()
+            fast.stop()
+
+    def test_parse_alias(self):
+        self.assertEqual(R.parse_alias("deep=Qwen3.8-Flash-Next"), ("deep", "Qwen3.8-Flash-Next"))
+        for bad in ("deep", "other=x", "fast="):
+            with self.assertRaises(Exception):
+                R.parse_alias(bad)
 
 
 class CliTests(unittest.TestCase):
