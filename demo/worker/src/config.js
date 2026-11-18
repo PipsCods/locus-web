@@ -7,6 +7,13 @@ const num = (value, fallback) => {
 };
 const str = (value, fallback = "") => (value === undefined || value === null || value === "" ? fallback : String(value));
 const list = (value, fallback = []) => (value ? String(value).split(",").map((s) => s.trim()).filter(Boolean) : fallback);
+// "id:label,id:label" -> [{id, label}]; a missing label falls back to the id
+const models = (value) =>
+  list(value).map((item) => {
+    const at = item.indexOf(":");
+    const id = (at < 0 ? item : item.slice(0, at)).trim();
+    return { id, label: (at < 0 ? "" : item.slice(at + 1).trim()) || id };
+  }).filter((m) => m.id);
 
 export function config(env) {
   const windowMinutes = num(env.DEMO_WINDOW_MINUTES, 120);
@@ -82,6 +89,8 @@ export function config(env) {
     chatMaxTokens: num(env.CHAT_MAX_TOKENS, 4096),
     chatMaxMessages: num(env.CHAT_MAX_MESSAGES, 60),
     thinkingKwarg: str(env.CHAT_THINKING_KWARG, "enable_thinking"),
+    // models the visitor may pick (a tiered box); empty = one model, no picker
+    chatModels: models(env.CHAT_MODELS),
     upstreamTimeoutMs: num(env.UPSTREAM_TIMEOUT_MS, 30_000),
 
     // Phase 2 manual mode: one machine started by hand

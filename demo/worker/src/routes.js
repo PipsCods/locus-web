@@ -112,7 +112,13 @@ export async function status(request, deps) {
   if (!s) return json({ ok: true, status: "none" });
   if (s.manual) return json(manualStatus(deps));
   const demo = await getDemo(deps.db, s.demoId);
-  return json(publicStatus(demo && { ...demo, model: deps.cfg.modelLabel }, deps.now()));
+  return json(withModels(publicStatus(demo && { ...demo, model: deps.cfg.modelLabel }, deps.now()), deps.cfg));
+}
+
+/** A ready tiered box also lists the models the visitor can pick from. */
+function withModels(st, cfg) {
+  if (st.status !== "ready" || !cfg.chatModels.length) return st;
+  return { ...st, models: cfg.chatModels.map(({ id, label }) => ({ id, label })) };
 }
 
 function manualStatus(deps) {
@@ -120,13 +126,13 @@ function manualStatus(deps) {
   if (!m) return { ok: true, status: "none" };
   const endsAt = m.endsAt && !Number.isNaN(Date.parse(m.endsAt)) ? new Date(m.endsAt).toISOString() : null;
   const ended = endsAt && Date.parse(endsAt) <= deps.now();
-  return {
+  return withModels({
     ok: true,
     status: ended ? "ended" : "ready",
     ...(endsAt ? { ends_at: endsAt } : {}),
     hardware: { cpu: m.cpu, ram_gb: m.ramGb, gpu: m.gpu },
     model: m.model,
-  };
+  }, deps.cfg);
 }
 
 /** Where chat goes for this session: { url, key } or an error Response. */
@@ -159,12 +165,17 @@ export async function chat(request, deps) {
   for (const m of messages) {
     if (!m || !["system", "user", "assistant"].includes(m.role) || typeof m.content !== "string") return fail(400, "Bad request: messages.");
   }
+  // a tiered box takes a model pick; a single-model box ignores the field
+  const models = cfg.chatModels;
+  const model = models.length && body.model !== undefined && body.model !== null ? body.model : undefined;
+  if (model !== undefined && !models.some((m) => m.id === model)) return fail(400, "Bad request: model.");
   const requested = Number(body.max_tokens);
   const upstreamBody = {
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
     stream: true,
     max_tokens: Number.isFinite(requested) && requested > 0 ? Math.min(Math.floor(requested), cfg.chatMaxTokens) : cfg.chatMaxTokens,
     chat_template_kwargs: { [cfg.thinkingKwarg]: body.thinking === true },
+    ...(model !== undefined ? { model } : {}),
   };
 
   // time out only while waiting for the first byte, never mid-stream

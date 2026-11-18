@@ -84,6 +84,8 @@
 		"CHAT_MAX_BODY_BYTES": "400000",
 		"CHAT_MAX_TOKENS": "4096",
 		"CHAT_THINKING_KWARG": "enable_thinking",
+		// tiered box only, e.g. "auto:Auto,deep:Qwen3.8-Flash-Next,fast:Qwen3.8-27B"; empty = one model
+		"CHAT_MODELS": "",
 
 		// Phase 2 manual mode: set MANUAL_UPSTREAM_URL here and the two MANUAL_* secrets above
 		"MANUAL_UPSTREAM_URL": "",

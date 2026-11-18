@@ -51,12 +51,14 @@ export function fakeLlama({ key, words = ["Hello", " from", " the", " fake", " m
     if (status !== 200) return new Response("upstream broke", { status });
     const enc = new TextEncoder();
     const chunks = [];
+    // a tiered box names the model that answered, like llama-server's --alias
+    const tag = (c) => (typeof body.model === "string" ? { model: body.model, ...c } : c);
     if (body.chat_template_kwargs?.enable_thinking) chunks.push({ choices: [{ index: 0, delta: { reasoning_content: "Thinking..." } }] });
     for (const w of words) chunks.push({ choices: [{ index: 0, delta: { content: w } }] });
     chunks.push({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }], timings: { predicted_n: words.length, predicted_per_second: 41.2 } });
     const stream = new ReadableStream({
       start(c) {
-        for (const ch of chunks) c.enqueue(enc.encode(`data: ${JSON.stringify(ch)}\n\n`));
+        for (const ch of chunks) c.enqueue(enc.encode(`data: ${JSON.stringify(tag(ch))}\n\n`));
         c.enqueue(enc.encode("data: [DONE]\n\n"));
         c.close();
       },

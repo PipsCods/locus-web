@@ -21,8 +21,8 @@ cron */5: sweep Vast instances, tunnels and DNS records named locus-demo-*; admi
 |---|---|
 | `POST /api/demo/request` | `{email, company_website (honeypot), turnstile_token, page}` → `200 {ok:true}` / `400 {ok:false,error}` (also `403` cross-site, `413`, `503` if Turnstile or email is down). Free and disposable mailboxes are refused here already. |
 | `GET /api/demo/confirm?token=…` | Single-use confirmation link (24 h): marks the email confirmed, sets the `locus_demo` cookie (HttpOnly, Secure, SameSite=Lax), starts the checks, redirects to `/demo`. A used or bad link redirects to `/demo?link=used` / `/demo?link=invalid`. The same route accepts the "ready" email's access link, which may be used repeatedly until the window ends (for opening the demo on another device). |
-| `GET /api/demo/status` | `{ok, status, step?, eta_minutes?, ends_at?, hardware?: {cpu, ram_gb, gpu}, model?}`; no cookie → `none`. |
-| `POST /api/demo/chat` | `{messages, thinking}` → llama-server SSE passed through unchanged. Adds the machine's API key, sets `chat_template_kwargs.enable_thinking` from `thinking`, caps `max_tokens` (`CHAT_MAX_TOKENS`) and body size (`CHAT_MAX_BODY_BYTES`). Errors `401`, `409`, `413`, `502`, `400`. |
+| `GET /api/demo/status` | `{ok, status, step?, eta_minutes?, ends_at?, hardware?: {cpu, ram_gb, gpu}, model?, models?: [{id, label}]}`; no cookie → `none`. `models` is only there when `status` is `ready` and `CHAT_MODELS` is set. |
+| `POST /api/demo/chat` | `{messages, thinking, model?}` → llama-server SSE passed through unchanged. Adds the machine's API key, sets `chat_template_kwargs.enable_thinking` from `thinking`, caps `max_tokens` (`CHAT_MAX_TOKENS`) and body size (`CHAT_MAX_BODY_BYTES`). With `CHAT_MODELS` set, `model` must be one of its ids (else `400 Bad request: model.`) and is forwarded as `model`; left out, nothing is forwarded and the box uses its default. Without `CHAT_MODELS`, `model` is ignored. Errors `401`, `409`, `413`, `502`, `400`. |
 | `GET /api/demo/decide?token=…&action=approve\|reject` | Owner's one-click links from the review email (single use, 3 days). Approving still goes through the caps. |
 | `GET /api/demo/manual?key=…` | Phase 2 manual mode, see below. |
 
@@ -122,6 +122,7 @@ export const onRequest = ({ request, env }) => env.DEMO.fetch(request);
 | `MODEL_LABEL` | `Qwen3.8-Flash-Next` | shown on the status page |
 | `CF_ACCOUNT_ID`, `CF_ZONE_ID`, `DEMO_DOMAIN` | | where tunnels and their CNAMEs live. Keep `DEMO_DOMAIN` the zone apex (`locus-ai.tech`): Cloudflare's free certificate covers one level of subdomain, so `locus-demo-<id>.demo.locus-ai.tech` would have no valid HTTPS certificate |
 | `CHAT_MAX_BODY_BYTES`, `CHAT_MAX_TOKENS`, `CHAT_THINKING_KWARG` | 400000, 4096, `enable_thinking` | chat proxy |
+| `CHAT_MODELS` | (empty) | tiered box only: `id:label,…`, e.g. `auto:Auto,deep:Qwen3.8-Flash-Next,fast:Qwen3.8-27B`. Lists the models the page offers and the ids `chat` accepts. Empty: one model, no picker |
 | `MANUAL_*` | | manual mode, below |
 
 Less common knobs (`CHECK_TIMEOUT_MS`, `AGENT_TIMEOUT_MS`, `AGENT_MAX_OUTPUT_TOKENS`,
