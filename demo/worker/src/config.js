@@ -15,6 +15,21 @@ const models = (value) =>
     return { id, label: (at < 0 ? "" : item.slice(at + 1).trim()) || id };
   }).filter((m) => m.id);
 
+// Tiered box: several model servers behind router.py on the machine (demo/instance/README.md).
+// SERVERS empty -> null: one server from MODEL_REPO/MODEL_FILES/RUNTIME/LLAMA_ARGS. Otherwise the
+// env vars for the machine: SERVERS, then for each name N in it the set N_* vars below, then the
+// set ROUTER_* vars, passed through as they are (onstart.sh validates them and has the defaults).
+const SERVER_FIELDS = ["REPO", "FILES", "RUNTIME", "ARGS", "GPUS", "CPUS", "ALIAS", "SLOTS", "CTX"];
+const ROUTER_VARS = ["ROUTER_POLICY", "ROUTER_DEFAULT", "ROUTER_JUDGE"];
+export function tieredEnv(env) {
+  const names = str(env.SERVERS).split(/\s+/).filter(Boolean);
+  if (!names.length) return null;
+  const out = { SERVERS: names.join(" ") };
+  for (const n of names) for (const f of SERVER_FIELDS) out[`${n}_${f}`] = str(env[`${n}_${f}`]);
+  for (const k of ROUTER_VARS) out[k] = str(env[k]);
+  return out;
+}
+
 export function config(env) {
   const windowMinutes = num(env.DEMO_WINDOW_MINUTES, 120);
   const bootTimeoutMinutes = num(env.BOOT_TIMEOUT_MINUTES, 45);
@@ -64,6 +79,7 @@ export function config(env) {
     vastRuntype: str(env.VAST_RUNTYPE, "args"),
     vastOnstart: str(env.VAST_ONSTART),
     vastGpuName: str(env.VAST_GPU_NAME, "RTX 5090"),
+    vastNumGpus: num(env.VAST_NUM_GPUS, 1),
     vastRamTiersGb: list(env.VAST_RAM_TIERS_GB, ["192", "128"]).map(Number),
     vastMinReliability: num(env.VAST_MIN_RELIABILITY, 0.99),
     vastMinInetDown: num(env.VAST_MIN_INET_DOWN, 1000),
@@ -76,6 +92,7 @@ export function config(env) {
     runtime: str(env.RUNTIME, "ik"),
     llamaArgs: str(env.LLAMA_ARGS),
     modelLabel: str(env.MODEL_LABEL, "Qwen3.8-Flash-Next"),
+    tieredEnv: tieredEnv(env), // null, or the SERVERS/<N>_*/ROUTER_* vars for a tiered box
 
     // Cloudflare (tunnel + DNS)
     cfAccountId: str(env.CF_ACCOUNT_ID),

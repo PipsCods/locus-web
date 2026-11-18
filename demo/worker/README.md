@@ -115,11 +115,14 @@ export const onRequest = ({ request, env }) => env.DEMO.fetch(request);
 | `VAST_DISK_GB` | 250 | |
 | `VAST_RUNTYPE` | `args` | keeps the image's own entrypoint (the start script) |
 | `VAST_GPU_NAME` | `RTX 5090` | offer filter |
+| `VAST_NUM_GPUS` | 1 | offer filter: GPUs per machine (2 for a tiered box). RAM tiers then apply to the whole slice |
 | `VAST_RAM_TIERS_GB` | `192,128` | tried in order |
 | `VAST_MIN_RELIABILITY`, `VAST_MIN_INET_DOWN`, `VAST_MAX_DPH` | 0.99, 1000, 3 | offer filters |
 | `VAST_PREFER_CPU` | `EPYC,Xeon` | preferred within a tier (not a server-side filter) |
 | `MODEL_REPO`, `MODEL_FILES`, `RUNTIME`, `LLAMA_ARGS` | | passed to the start script; set after the benchmark |
 | `MODEL_LABEL` | `Qwen3.8-Flash-Next` | shown on the status page |
+| `SERVERS` | | tiered box: e.g. `DEEP FAST`. When set, the machine gets `SERVERS`, each set `<N>_REPO`, `<N>_FILES`, `<N>_RUNTIME`, `<N>_ARGS`, `<N>_GPUS`, `<N>_CPUS`, `<N>_ALIAS`, `<N>_SLOTS`, `<N>_CTX` var (add them to `vars` as needed; no quotes) and the `ROUTER_*` vars, instead of `MODEL_REPO`…`LLAMA_ARGS`. Meanings in [`demo/instance/README.md`](../instance/README.md#demo-machine-env-contract) |
+| `ROUTER_POLICY`, `ROUTER_DEFAULT`, `ROUTER_JUDGE` | | tiered box only; empty = the machine's defaults (`difficulty+spill`, `deep`, `none`) |
 | `CF_ACCOUNT_ID`, `CF_ZONE_ID`, `DEMO_DOMAIN` | | where tunnels and their CNAMEs live. Keep `DEMO_DOMAIN` the zone apex (`locus-ai.tech`): Cloudflare's free certificate covers one level of subdomain, so `locus-demo-<id>.demo.locus-ai.tech` would have no valid HTTPS certificate |
 | `CHAT_MAX_BODY_BYTES`, `CHAT_MAX_TOKENS`, `CHAT_THINKING_KWARG` | 400000, 4096, `enable_thinking` | chat proxy |
 | `CHAT_MODELS` | (empty) | tiered box only: `id:label,…`, e.g. `auto:Auto,deep:Qwen3.8-Flash-Next,fast:Qwen3.8-27B`. Lists the models the page offers and the ids `chat` accepts. Empty: one model, no picker |

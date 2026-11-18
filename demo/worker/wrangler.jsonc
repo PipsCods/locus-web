@@ -64,6 +64,7 @@
 		"VAST_DISK_GB": "250",
 		"VAST_RUNTYPE": "args",
 		"VAST_GPU_NAME": "RTX 5090",
+		"VAST_NUM_GPUS": "1",
 		"VAST_RAM_TIERS_GB": "192,128",
 		"VAST_MIN_RELIABILITY": "0.99",
 		"VAST_MIN_INET_DOWN": "1000",
@@ -74,6 +75,15 @@
 		"RUNTIME": "ik",
 		"LLAMA_ARGS": "",
 		"MODEL_LABEL": "Qwen3.8-Flash-Next",
+
+		// Tiered box (two models behind router.py, e.g. VAST_NUM_GPUS 2): SERVERS e.g. "DEEP FAST",
+		// then per name N the vars N_REPO, N_FILES, N_RUNTIME, N_CTX and optional N_ARGS, N_SLOTS,
+		// N_GPUS, N_CPUS, N_ALIAS (added here when used; no quotes). Empty SERVERS = the single
+		// server above. Empty ROUTER_* = the machine's defaults. See demo/instance/README.md.
+		"SERVERS": "",
+		"ROUTER_POLICY": "",
+		"ROUTER_DEFAULT": "",
+		"ROUTER_JUDGE": "",
 
 		// Cloudflare account/zone for per-demo tunnels: locus-demo-<id>.<DEMO_DOMAIN>
 		"CF_ACCOUNT_ID": "",

@@ -39,10 +39,13 @@ export function instanceSpec(cfg, { demoId, apiKey, tunnelToken }) {
     runtype: cfg.vastRuntype,
     cancel_unavail: true,
     env: envString({
-      MODEL_REPO: cfg.modelRepo,
-      MODEL_FILES: cfg.modelFiles,
-      RUNTIME: cfg.runtime,
-      LLAMA_ARGS: cfg.llamaArgs,
+      // one server, or a tiered box (SERVERS + per-server vars; onstart.sh ignores MODEL_* then)
+      ...(cfg.tieredEnv ?? {
+        MODEL_REPO: cfg.modelRepo,
+        MODEL_FILES: cfg.modelFiles,
+        RUNTIME: cfg.runtime,
+        LLAMA_ARGS: cfg.llamaArgs,
+      }),
       LLAMA_API_KEY: apiKey,
       CF_TUNNEL_TOKEN: tunnelToken,
       DEMO_TTL_SECONDS: cfg.instanceTtlSeconds,
@@ -64,7 +67,7 @@ export async function rentStep(deps, demoId, tunnelId) {
   const token = await cf.tunnelToken(tunnelId);
   let lastErr = "no offer matched";
   for (let i = 0; i < 3; i++) {
-    const pick = pickOffer(offers, { tiersGb: cfg.vastRamTiersGb, exclude: tried, preferCpu: cfg.vastPreferCpu });
+    const pick = pickOffer(offers, { tiersGb: cfg.vastRamTiersGb, exclude: tried, preferCpu: cfg.vastPreferCpu, numGpus: cfg.vastNumGpus });
     if (!pick) break;
     const { offer } = pick;
     tried.push(offer.machine_id);

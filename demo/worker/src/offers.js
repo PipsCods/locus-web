@@ -10,7 +10,7 @@ export function offerQuery(cfg) {
     verified: { eq: true },
     rentable: { eq: true },
     rented: { eq: false },
-    num_gpus: { eq: 1 },
+    num_gpus: { eq: cfg.vastNumGpus ?? 1 },
     gpu_name: { eq: cfg.vastGpuName },
     reliability: { gt: cfg.vastMinReliability },
     inet_down: { gte: cfg.vastMinInetDown },
@@ -22,10 +22,10 @@ export function offerQuery(cfg) {
   };
 }
 
-export function pickOffer(offers, { tiersGb, exclude = [], preferCpu = [] }) {
+export function pickOffer(offers, { tiersGb, exclude = [], preferCpu = [], numGpus = 1 }) {
   const skip = new Set(exclude.map(Number));
   const prefers = (o) => preferCpu.some((p) => String(o.cpu_name ?? "").toLowerCase().includes(p.toLowerCase()));
-  const usable = offers.filter((o) => o && o.id && !skip.has(Number(o.machine_id)) && o.num_gpus === 1 && o.verified !== false);
+  const usable = offers.filter((o) => o && o.id && !skip.has(Number(o.machine_id)) && o.num_gpus === numGpus && o.verified !== false);
   for (const tier of [...tiersGb].sort((a, b) => b - a)) {
     const fit = usable.filter((o) => Number(o.cpu_ram) >= tier * 1000);
     if (!fit.length) continue;
