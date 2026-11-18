@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Find (and optionally rent) a Vast.ai machine for the locus benchmark/demo.
 #
-# Searches verified on-demand offers with exactly one RTX 5090, reliability
+# Searches verified on-demand offers with exactly one GPU (RTX 5090 unless --gpu), reliability
 # > 0.99, >= 1000 Mb/s download, >= 250 GB disk and >= 128 GB RAM, then ranks
 # them client-side:
 #   1. RAM tier: >= 192 GB first, then >= 128 GB
@@ -26,6 +26,7 @@
 #   --image IMAGE        image to run (required with --create; or $LOCUS_IMAGE)
 #   --login 'ARGS'       docker login args for a private registry ($LOCUS_IMAGE_LOGIN)
 #   --label LABEL        instance label (default locus-bench-<UTC timestamp>)
+#   --gpu NAME           GPU model as Vast names it, e.g. 'RTX 3090' (default RTX 5090)
 #   --disk GB            disk to allocate and to require (default 250)
 #   --min-ram GB         lowest RAM tier to accept (default 128)
 #   --top-ram GB         preferred RAM tier (default 192)
@@ -53,6 +54,7 @@ LIMIT=15
 JSON=0
 # Oldest CUDA the image runs on; keep in sync with CUDA_VERSION in Dockerfile.
 MIN_CUDA=13.0
+GPU=RTX_5090
 
 die() { echo "find-offer: $*" >&2; exit 1; }
 
@@ -62,6 +64,7 @@ while [[ $# -gt 0 ]]; do
     --image) IMAGE=${2:?}; shift ;;
     --login) LOGIN=${2:?}; shift ;;
     --label) LABEL=${2:?}; shift ;;
+    --gpu) GPU=${2:?}; GPU=${GPU// /_}; shift ;;
     --disk) DISK=${2:?}; shift ;;
     --min-ram) MIN_RAM=${2:?}; shift ;;
     --top-ram) TOP_RAM=${2:?}; shift ;;
@@ -89,7 +92,7 @@ fi
 # 1000, raw results are in MB); cuda_vers is an alias of cuda_max_good;
 # dph is an alias of dph_total. verified/rentable/external=false are also in
 # the CLI's default query, stated here so the intent is visible.
-query="num_gpus=1 gpu_name=RTX_5090 verified=true rentable=true rented=false"
+query="num_gpus=1 gpu_name=${GPU} verified=true rentable=true rented=false"
 query+=" external=false cpu_arch=amd64"
 query+=" reliability>0.99 inet_down>=1000 disk_space>=${DISK}"
 query+=" cpu_ram>=${MIN_RAM} cuda_vers>=${MIN_CUDA} dph<=${MAX_DPH}"
