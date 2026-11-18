@@ -16,7 +16,8 @@ Choose a fresh password-manager key of 16–256 characters. Run this from
 Open [`/demo?recording=1`](http://127.0.0.1:5173/demo?recording=1).
 Select **Threadripper PRO 9995WX** and **Invoice review**, then enter your
 key and select **See recommendation**. **Reserve demo server** starts the
-simulated progress and opens the locus invoice chat. Continue to
+simulated progress. When the server is ready, the preview stays on the
+progress screen until you select **Open chat**. Continue to
 **Try the two-model server**, pick **Deep**, and ask which records to
 check. **Open Invoice Review preview**
 opens the separate finance interface with the same invoice. Ask the

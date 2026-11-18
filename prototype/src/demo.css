@@ -7,6 +7,7 @@
 .demo__turnstile { margin-top: 16px; }
 .demo__turnstile:empty { margin-top: 0; }
 .demo__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-top: 8px; }
+.demo__actions[hidden] { display: none; }
 .check__head strong { font-weight: 500; color: var(--ink); }
 
 /* ── the wait: where the server stands ── */

@@ -32,6 +32,7 @@ const show = (name) => { for (const v of views) v.hidden = v.dataset.view !== na
 
 let status = null;     // the last answer from /api/demo/status
 let pollTimer = 0;
+let previewChatOpened = false;
 
 // ── status ──────────────────────────────────────────────────────
 
@@ -71,7 +72,12 @@ async function draw() {
     return;
   }
   if (["checking", "review", "queued", "booting"].includes(s)) { wait(status); pollTimer = setTimeout(refresh, isRecording() && status.recording === "preview" ? 1000 : POLL_WAIT); return; }
-  if (s === "ready") { await ready(status); pollTimer = setTimeout(refresh, POLL_READY); return; }
+  if (s === "ready") {
+    if (recordingView === "1" && status.recording === "preview" && !previewChatOpened) wait(status);
+    else await ready(status);
+    pollTimer = setTimeout(refresh, POLL_READY);
+    return;
+  }
   stop(["rejected", "failed", "ended"].includes(s) ? s : "unavailable");
 }
 
@@ -182,14 +188,17 @@ const WAIT = {
   review: ["Email confirmed", "A person is looking at your request.", "The automatic checks could not decide, so one of us will. We email you either way, usually within one working day."],
   queued: ["Approved", "You are next in line for a server.", "Every demo server is in use right now. Yours starts as soon as one is free."],
   booting: ["Approved", "Your server is getting ready.", "We are setting up a server with one graphics card, just for you. The model is large, so this takes a while."],
+  ready: ["Demo server", "Your server is ready.", ""],
 };
 
 function wait(st) {
   const [label, title, lead] = WAIT[st.status];
+  const complete = st.status === "ready";
   $("[data-wait-label]").textContent = isRecording() ? "Demo server" : label;
   $("[data-wait-title]").textContent = title;
   $("[data-wait-lead]").textContent = lead;
-  const at = st.status === "booting" ? Math.max(1, TRACK.findIndex(([id]) => id === st.step)) : st.status === "queued" ? 1 : 0;
+  $("[data-wait-lead]").hidden = complete;
+  const at = complete ? TRACK.length : st.status === "booting" ? Math.max(1, TRACK.findIndex(([id]) => id === st.step)) : st.status === "queued" ? 1 : 0;
   $("[data-wait-note]").textContent = isRecording()
     ? (hardwareLine(st.hardware) || "Keep this page open to follow the reservation.")
     : "You can close this tab. We will email you a link as soon as your server is ready, and your two hours start only then.";
@@ -198,8 +207,14 @@ function wait(st) {
   const eta = $("[data-eta]"), m = Number(st.eta_minutes);
   eta.hidden = !(st.eta_minutes != null && m >= 0);
   eta.textContent = m <= 1 ? "Almost there." : `About ${Math.round(m)} minutes to go.`;
+  $("[data-preview-chat-action]").hidden = !complete;
   show("wait");
 }
+
+$("[data-preview-chat]").addEventListener("click", () => {
+  previewChatOpened = true;
+  refresh();
+});
 
 // ── rejected / failed / ended / unavailable ─────────────────────
 
