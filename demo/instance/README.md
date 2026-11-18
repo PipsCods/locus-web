@@ -11,8 +11,19 @@ search, the benchmark, and the demo start script.
 | `bench-3090.sh` | rented machine | full EPYC/3090 repeat with hardware checks, host and GPU telemetry, and a rental deadline |
 | `bench-concurrency.sh` | rented machine | closed-loop chat and document workloads at 1, 2, 4 and 8 simultaneous users |
 | `onstart.sh` | rented machine | demo start: self-destruct timer, tunnel, download, server |
+| `router.py` | rented machine | tiered mode only: routes each chat request to the `deep` or `fast` server (difficulty, context fit, queue depth); stdlib Python |
 | `llama-wrapper.sh` | rented machine | `llama-server-ik`, `llama-server-mainline` (and `llama-bench-*`) |
 | `prompts/` | rented machine | spot-check prompts and the synthetic report they use |
+
+## Checks
+
+No CI; run these before committing here:
+
+```sh
+cd demo/instance
+for f in *.sh; do bash -n "$f"; done   # and shellcheck *.sh if you have it
+python3 -m unittest -v test_router     # router.py against fake llama-servers, ~15 s
+```
 
 ## Build and push the image
 
@@ -189,3 +200,35 @@ Thinking control for clients: the chat template turns thinking off only with
 `reasoning_effort` `low`, `medium`, `xhigh` (default). There is no `none`
 level in the template (it raises an error); mainline also maps the OpenAI
 field `reasoning_effort: "none"` to thinking off, ik does not.
+
+## Router (tiered mode)
+
+`router.py` sits on `127.0.0.1:8080` in front of two llama-servers and
+streams their answers through unchanged:
+
+```sh
+python3 router.py --port 8080 --key-file /run/locus/api-key \
+  --backend deep=8081:4:32768 --backend fast=8082:8:16384 \
+  --policy difficulty+spill --default deep [--judge none|fast] [--log FILE]
+```
+
+`--backend` is `NAME=PORT:SLOTS:CTX_PER_SLOT`; names are `deep` and `fast`.
+The request's `model` picks the tier: `deep`, `fast`, or `auto` (absent means
+`--default`). For `auto`, unhealthy tiers and tiers whose per-slot context
+cannot hold the prompt (chars / 3.5) plus `max_tokens` are dropped first, then
+the policy decides: `deep-only`, `fast-only`, `random:P` (deep with
+probability P), `difficulty` (heuristic score >= `THRESHOLD` goes deep) or
+`difficulty+spill` (also moves a request off a tier with no free slot when the
+other has room, unless the score is very high). Benchmarks override per
+request with `"router_policy"` and `"router_judge"` in the body; the router
+removes `model` and both of these before forwarding. `--judge fast` adds a
+one-token easy/hard verdict from the fast tier (2 s timeout, falls back to the
+heuristic). Weights and thresholds are constants at the top of the file.
+
+An explicit `deep`/`fast` request to an unhealthy tier gets 503; `auto` uses
+the other tier. Responses carry `x-locus-tier`, `x-locus-score` and
+`x-locus-reason`. `GET /health` needs no key and is 200 only when both
+backends are; `GET /router/stats` (key) gives per-tier in-flight, slots,
+routed and error counts, spills and judge timing. With `--log`, one JSON line
+per request: tier, score, reason, features, in-flight counts, TTFT, latency,
+status.
