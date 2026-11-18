@@ -125,7 +125,11 @@ nohup /opt/locus/bench-3090.sh DEADLINE_EPOCH /workspace/bench/3090 \
 ```
 
 The runner arms the container's self-destruct before setup, then checks the
-CPU allocation, RAM, GPU and host activity before downloading the quants. It
+CPU allocation, RAM, GPU and host activity before downloading the quants.
+It requires affinity to every host CPU and records the exact CPU-time quota,
+allowing up to 5% for host overhead on a full-GPU offer. Pass
+`--reuse-build` after the results directory to resume on the same machine
+with the runtimes already installed by `setup-on-box.sh`. The preflight
 requires at least 90% CPU idle over a ten-second sample and records host and
 GPU telemetry during both suites. The full suite uses the pinned runtimes and
 both quants. The concurrency suite reuses the `UD-IQ4_XS` fit from each runtime

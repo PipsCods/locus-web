@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Run the full benchmark on the rented EPYC/3090 box. Pass a UTC epoch
-# deadline computed at rental time and an unused results directory.
+# deadline computed at rental time and an unused results directory. Use
+# --reuse-build after setup has completed on this instance.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 deadline=${1:?usage: bench-3090.sh DEADLINE_EPOCH /workspace/bench/RUN}
 out=${2:?results directory required}
+setup_mode=${3:-}
+[[ -z "$setup_mode" || "$setup_mode" == --reuse-build ]] || { echo "Unknown option: $setup_mode" >&2; exit 1; }
 if ! [[ "$deadline" =~ ^[0-9]+$ ]] || (( deadline <= $(date +%s) )); then
   echo "Rental deadline must be in the future" >&2
   exit 1
@@ -34,13 +37,17 @@ if [[ ! -s "$out/self-destruct.pid" ]] || ! kill -0 "$(cat "$out/self-destruct.p
 fi
 unset CONTAINER_API_KEY
 
-./setup-on-box.sh
+if [[ "$setup_mode" != --reuse-build ]]; then
+  ./setup-on-box.sh
+fi
 export PATH=/opt/venv/bin:$PATH
 ./bench.sh --hw-only --out "$out/preflight"
 jq -e '
   (.cpu_model | test("EPYC"; "i")) and
   (.gpu_name == "NVIDIA GeForce RTX 3090") and
-  (.host_threads == .slice_cpus) and
+  (.host_threads | tonumber) as $host_threads |
+  (.cpu_affinity_threads == $host_threads) and
+  (.cpu_quota_threads == null or .cpu_quota_threads >= 0.95 * $host_threads) and
   ((.ram_slice_gb | tonumber) >= 190)
 ' "$out/preflight/hardware.json" >/dev/null \
   || { echo "Expected EPYC, full host CPU allocation, one RTX 3090 and at least 190 GB RAM" >&2; exit 1; }

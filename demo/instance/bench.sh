@@ -205,20 +205,17 @@ log "results in $OUT"
 
 lscpu_field() { lscpu | awk -F: -v k="$1" '$1 == k { sub(/^[ \t]+/, "", $2); print $2; exit }'; }
 
-# CPUs this container may use: cgroup v2 cpu.max, then v1 CFS quota, then cpuset.
-slice_cpus() {
-  local q p available
-  available=$(nproc)
+# CPU-time quota in logical CPUs, which can be fractional even with full affinity.
+cpu_quota() {
+  local q p
   if [[ -r /sys/fs/cgroup/cpu.max ]]; then
     read -r q p </sys/fs/cgroup/cpu.max
   elif [[ -r /sys/fs/cgroup/cpu/cpu.cfs_quota_us ]]; then
     q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us)
     p=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us)
   fi
-  if [[ "${q:-}" =~ ^[0-9]+$ ]] && (( q > 0 && q < available * p )); then
-    echo "$(( q / p )) quota"
-  else
-    echo "$available cpuset"
+  if [[ "${q:-}" =~ ^[0-9]+$ ]] && (( q > 0 )); then
+    awk -v q="$q" -v p="$p" 'BEGIN { print q / p }'
   fi
 }
 
@@ -263,8 +260,15 @@ memory_desc() {
 }
 
 record_hardware() {
-  local cpus src threads_per_core phys gpu ik_variant
-  read -r cpus src < <(slice_cpus)
+  local cpus src affinity quota threads_per_core phys gpu ik_variant
+  affinity=$(nproc)
+  quota=$(cpu_quota)
+  cpus=$affinity
+  src=cpuset
+  if [[ -n "$quota" ]] && (( ${quota%.*} < affinity )); then
+    cpus=${quota%.*}
+    src=quota
+  fi
   threads_per_core=$(lscpu_field "Thread(s) per core")
   threads_per_core=${threads_per_core:-1}
   phys=$(( cpus / threads_per_core ))
@@ -284,6 +288,7 @@ record_hardware() {
     --arg numa "$(lscpu_field 'NUMA node(s)')" \
     --arg l3 "$(lscpu_field 'L3 cache')" \
     --arg slice_cpus "$cpus" --arg cpu_limit_source "$src" \
+    --argjson cpu_affinity_threads "$affinity" --argjson cpu_quota_threads "${quota:-null}" \
     --arg physical_cores "$phys" \
     --arg avx512 "$(grep -qw avx512f /proc/cpuinfo && echo yes || echo no)" \
     --arg ik_variant "$ik_variant" \
