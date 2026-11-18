@@ -8,8 +8,8 @@ export const RECORDING_MODELS = [
   { id: "deep", label: "Qwen3.8-Flash-Next" },
 ];
 export const RECORDING_SETUPS = [
-  { id: "1", name: "1 user at a time", gpuCount: 1, gpu: "1× RTX 3090", model: "Qwen3.8-Flash-Next" },
-  { id: "8", name: "8 users at a time", gpuCount: 2, gpu: "2× RTX 3090", model: "Qwen3.8-Flash-Next + Qwen3.8-27B" },
+  { id: "1", gpuCount: 1, gpu: "1× RTX 3090", model: "Qwen3.8-Flash-Next" },
+  { id: "8", gpuCount: 2, gpu: "2× RTX 3090", model: "Qwen3.8-Flash-Next + Qwen3.8-27B" },
 ];
 export function setupForUsers(users) {
   if (typeof users === "string" || typeof users === "number") {
@@ -17,4 +17,12 @@ export function setupForUsers(users) {
   }
 }
 export const recordingModels = (users) => setupForUsers(users)?.gpuCount === 2 ? RECORDING_MODELS : [];
-export const userOptions = RECORDING_SETUPS.map(({ id, name }) => ({ id, name }));
+
+// Size each range at its upper end, assuming 10% of all users are active together.
+const USERS_PER_ACTIVE_USER = 10;
+export const userOptions = RECORDING_SETUPS.map(({ id }, index) => {
+  const previous = Number(RECORDING_SETUPS[index - 1]?.id ?? 0);
+  const min = previous * USERS_PER_ACTIVE_USER + 1;
+  const max = Number(id) * USERS_PER_ACTIVE_USER;
+  return { id, name: `${min}–${max} users` };
+});

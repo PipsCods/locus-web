@@ -31,8 +31,8 @@ loopback-only Wrangler when `RECORDING_TAKE_ID` is set.
 
 | Route | What it does |
 |---|---|
-| `GET /api/demo/recording/catalog` | Lists the server profiles and supported concurrent user counts. |
-| `POST /api/demo/recording/recommendation` | Takes `{profile, users, key}` and returns the recommendation and preflight availability. |
+| `GET /api/demo/recording/catalog` | Lists the server profiles and total user ranges. |
+| `POST /api/demo/recording/recommendation` | Takes `{profile, users, key}` and returns the recommendation and preflight availability. The `users` value is the option ID from the catalog. |
 | `POST /api/demo/recording/start` | Takes the same body, checks availability again, and starts or resumes the armed take. Sets the normal session cookie for `status` and `chat`. |
 
 ## Safety rules (enforced in code)
