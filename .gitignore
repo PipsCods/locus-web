@@ -30,3 +30,6 @@ graphify-out/
 .DS_Store
 Thumbs.db
 *.log
+
+# Python bytecode (demo/instance/loadgen.py)
+__pycache__/
