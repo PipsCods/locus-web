@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDemo } from "../src/db.js";
-import { RECORDING_OFFER, fakeVast } from "../src/fakes.js";
+import { RECORDING_OFFER, RECORDING_TIERED_OFFER, fakeVast } from "../src/fakes.js";
 import { handle } from "../src/index.js";
 import { provision, rentStep, tunnelStep } from "../src/provision.js";
 import { runSweep } from "../src/sweep.js";
@@ -9,7 +9,7 @@ import { cookieFrom, fakeStep, makeTestDeps, resetDb } from "./helpers.js";
 const ROOT = "http://127.0.0.1:8787/api/demo";
 const KEY = crypto.randomUUID();
 const EXPIRES_AT = "2026-11-16T12:20:00.000Z";
-const payload = { profile: "threadripper", workload: "invoice-review", key: KEY };
+const payload = { profile: "threadripper", users: "1", key: KEY };
 
 function fixture(vars = {}, offers = [RECORDING_OFFER]) {
   const test = makeTestDeps({ vars: {
@@ -91,6 +91,47 @@ describe("private recording", () => {
     expect(deps.cf.state.tunnels.size).toBe(0);
     expect(deps.cf.state.dns.size).toBe(0);
     expect(deps.email.sent).toHaveLength(0);
+  });
+
+  it("reserves the eight-user setup and keeps both models on that session", async () => {
+    const { deps, clock, llama } = fixture({
+      RECORDING_OFFER_ID: "4", RECORDING_MAX_DPH: "1",
+      SERVERS: "DEEP FAST", DEEP_REPO: "unsloth/Qwen3.8-Flash-Next-GGUF", FAST_REPO: "unsloth/Qwen3.8-27B-GGUF",
+    }, [RECORDING_OFFER, RECORDING_TIERED_OFFER]);
+    const larger = { ...payload, users: "8" };
+    expect(await (await call(deps, "/recording/recommendation", payload)).json()).toMatchObject({
+      available: false, recommendation: { gpu: "1× RTX 3090" },
+    });
+    expect(await (await call(deps, "/recording/recommendation", larger)).json()).toMatchObject({
+      available: true, recommendation: { gpu: "2× RTX 3090", model: "Qwen3.8-Flash-Next + Qwen3.8-27B" },
+    });
+    const response = await start(deps, larger);
+    const { session: id } = await response.json();
+    expect((await start(deps)).status).toBe(409);
+    expect((await getDemo(deps.db, id)).recording_users).toBe(8);
+
+    const cookie = cookieFrom(response);
+    const step = fakeStep(clock);
+    const sleep = step.sleep;
+    step.sleep = async (name, ms) => {
+      if (name === "window") {
+        expect(await status(deps, cookie)).toMatchObject({
+          status: "ready", hardware: { gpu: "2× RTX 3090" },
+          models: [{ id: "fast", label: "Qwen3.8-27B" }, { id: "deep", label: "Qwen3.8-Flash-Next" }],
+        });
+        const chat = await call(deps, "/chat", {
+          model: "deep", messages: [{ role: "user", content: "Review this invoice" }],
+        }, { cookie });
+        expect(chat.status).toBe(200);
+        await chat.text();
+        expect(llama.calls.at(-1).body.model).toBe("deep");
+      }
+      await sleep(name, ms);
+    };
+    expect(await provision(deps, id, step)).toBe("ended");
+    expect(deps.vast.state.created).toHaveLength(1);
+    expect(deps.vast.state.created[0].offerId).toBe(4);
+    expect(deps.vast.state.created[0].spec.env).toContain('SERVERS="DEEP FAST"');
   });
 
   it("returns the same take after a failed workflow start", async () => {

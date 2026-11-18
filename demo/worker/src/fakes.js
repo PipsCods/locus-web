@@ -135,6 +135,8 @@ export const RECORDING_OFFER = {
   disk_space: 300, inet_down: 1500, cuda_max_good: 13, end_date: 4102444800,
 };
 
+export const RECORDING_TIERED_OFFER = { ...RECORDING_OFFER, id: 4, machine_id: 44, num_gpus: 2, dph_total: 0.85 };
+
 let devState; // survives between requests inside one `wrangler dev` isolate
 export function devFakes(cfg) {
   if (!devState) {
@@ -144,7 +146,7 @@ export function devFakes(cfg) {
       turnstile: fakeTurnstile(),
       email: fakeEmail(),
       openai: fakeOpenAI(),
-      vast: fakeVast(cfg.recording ? { offers: [RECORDING_OFFER] } : {}),
+      vast: fakeVast(cfg.recording ? { offers: [RECORDING_OFFER, RECORDING_TIERED_OFFER] } : {}),
       cf: fakeCloudflare(),
     };
   }

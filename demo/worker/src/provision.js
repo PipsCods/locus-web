@@ -12,6 +12,7 @@ import { offerQuery, pickOffer, hardwareOf } from "./offers.js";
 import { envString } from "./clients/vast.js";
 import { issue, randomId } from "./tokens.js";
 import { readyEmail, failedEmail, ownerFailedEmail } from "./emails.js";
+import { setupForUsers } from "../../../prototype/shared/recording.js";
 import { recordingOffer, takeDemoId } from "./recording.js";
 
 const DEAD = new Set(["exited", "unknown", "offline"]);
@@ -108,10 +109,12 @@ async function rentRecording(deps, demo, tunnelId) {
   }
 
   if (await takeDemoId(cfg.recording.take) !== demoId) throw new Error("This recording take is no longer armed");
-  const offer = await recordingOffer(deps, demo.recording_profile, deadline, demo.vast_offer_id);
+  const setup = setupForUsers(demo.recording_users);
+  if (!setup) return { unavailable: true };
+  const offer = await recordingOffer(deps, demo.recording_profile, setup.gpuCount, deadline, demo.vast_offer_id);
   if (!offer) return { unavailable: true };
   const token = await cf.tunnelToken(tunnelId);
-  const spec = instanceSpec({ ...cfg, tieredEnv: null }, { demoId, apiKey: demo.api_key, tunnelToken: token, deadline });
+  const spec = instanceSpec({ ...cfg, tieredEnv: setup.gpuCount === 2 ? cfg.tieredEnv : null }, { demoId, apiKey: demo.api_key, tunnelToken: token, deadline });
   const now = deps.now();
   if (deadline - now < 1000) throw new Error("Recording take has expired");
   const t = new Date(now).toISOString();

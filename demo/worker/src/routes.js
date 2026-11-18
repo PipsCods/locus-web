@@ -6,6 +6,7 @@ import { createDemo, getDemo, transition, capCounts } from "./db.js";
 import { requestCapError } from "./caps.js";
 import { isDisposable, isFree } from "./checks/index.js";
 import { publicStatus } from "./status.js";
+import { recordingModels, setupForUsers } from "../../../prototype/shared/recording.js";
 import { confirmEmail } from "./emails.js";
 import { startScreening, admit } from "./pipeline.js";
 
@@ -114,14 +115,16 @@ export async function status(request, deps) {
   if (s.manual && !deps.cfg.recording) return json(manualStatus(deps));
   const row = s.demoId && await getDemo(deps.db, s.demoId);
   const demo = sessionRow(row, deps.cfg);
-  const out = publicStatus(demo && { ...demo, model: deps.cfg.modelLabel }, deps.now());
-  return json(deps.cfg.recording ? { ...out, ...recording } : withModels(out, deps.cfg));
+  const model = setupForUsers(demo?.recording_profile ? demo.recording_users : null)?.model ?? deps.cfg.modelLabel;
+  const out = publicStatus(demo && { ...demo, model }, deps.now());
+  const models = deps.cfg.recording ? recordingModels(demo?.recording_users) : deps.cfg.chatModels;
+  return json(withModels({ ...out, ...recording }, models));
 }
 
 /** A ready tiered box also lists the models the visitor can pick from. */
-function withModels(st, cfg) {
-  if (st.status !== "ready" || !cfg.chatModels.length) return st;
-  return { ...st, models: cfg.chatModels.map(({ id, label }) => ({ id, label })) };
+function withModels(st, models) {
+  if (st.status !== "ready" || !models.length) return st;
+  return { ...st, models };
 }
 
 function sessionRow(row, cfg) {
@@ -139,7 +142,7 @@ function manualStatus(deps) {
     ...(endsAt ? { ends_at: endsAt } : {}),
     hardware: { cpu: m.cpu, ram_gb: m.ramGb, gpu: m.gpu },
     model: m.model,
-  }, deps.cfg);
+  }, deps.cfg.chatModels);
 }
 
 /** Where chat goes for this session: { url, key } or an error Response. */
@@ -149,13 +152,13 @@ async function upstreamFor(request, deps) {
   if (s.manual && !deps.cfg.recording) {
     const st = manualStatus(deps);
     if (st.status !== "ready") return { error: fail(409, "This demo has ended.") };
-    return { url: deps.cfg.manual.url, key: deps.cfg.manual.key };
+    return { url: deps.cfg.manual.url, key: deps.cfg.manual.key, models: deps.cfg.chatModels };
   }
   const row = s.demoId && await getDemo(deps.db, s.demoId);
   const demo = sessionRow(row, deps.cfg);
   const st = publicStatus(demo, deps.now());
   if (st.status !== "ready" || !demo.hostname || !demo.api_key) return { error: fail(409, st.status === "ended" ? "This demo has ended." : "The demo machine is not ready yet.") };
-  return { url: `https://${demo.hostname}`, key: demo.api_key };
+  return { url: `https://${demo.hostname}`, key: demo.api_key, models: deps.cfg.recording ? recordingModels(demo.recording_users) : deps.cfg.chatModels };
 }
 
 // POST /api/demo/chat
@@ -174,7 +177,7 @@ export async function chat(request, deps) {
     if (!m || !["system", "user", "assistant"].includes(m.role) || typeof m.content !== "string") return fail(400, "Bad request: messages.");
   }
   // a tiered box takes a model pick; a single-model box ignores the field
-  const models = cfg.recording ? [] : cfg.chatModels;
+  const { models } = up;
   const model = models.length && body.model !== undefined && body.model !== null ? body.model : undefined;
   if (model !== undefined && !models.some((m) => m.id === model)) return fail(400, "Bad request: model.");
   const requested = Number(body.max_tokens);

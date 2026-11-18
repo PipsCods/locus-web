@@ -183,6 +183,8 @@ const TRACK = [
   ["ready", "Ready to use"],
 ];
 
+const RECORDING_TRACK = { check: "Matching server found", downloading: "Downloading model files" };
+
 const WAIT = {
   checking: ["Email confirmed", "We are checking your request.", "A few automatic checks run now. This usually takes a minute or two."],
   review: ["Email confirmed", "A person is looking at your request.", "The automatic checks could not decide, so one of us will. We email you either way, usually within one working day."],
@@ -196,14 +198,16 @@ function wait(st) {
   const complete = st.status === "ready";
   $("[data-wait-label]").textContent = isRecording() ? "Demo server" : label;
   $("[data-wait-title]").textContent = title;
-  $("[data-wait-lead]").textContent = lead;
+  $("[data-wait-lead]").textContent = isRecording() && st.status === "booting"
+    ? "We’re setting up your trial server and loading the model files."
+    : lead;
   $("[data-wait-lead]").hidden = complete;
   const at = complete ? TRACK.length : st.status === "booting" ? Math.max(1, TRACK.findIndex(([id]) => id === st.step)) : st.status === "queued" ? 1 : 0;
   $("[data-wait-note]").textContent = isRecording()
     ? (hardwareLine(st.hardware) || "Keep this page open to follow the reservation.")
     : "You can close this tab. We will email you a link as soon as your server is ready, and your two hours start only then.";
   $("[data-track]").innerHTML = TRACK.map(([id, text], i) =>
-    `<li class="${i < at ? "is-done" : i === at ? "is-now" : ""}"${i === at ? ' aria-current="step"' : ""}><span class="track__mark" aria-hidden="true"></span>${esc(isRecording() && id === "check" ? "Matching server found" : text)}</li>`).join("");
+    `<li class="${i < at ? "is-done" : i === at ? "is-now" : ""}"${i === at ? ' aria-current="step"' : ""}><span class="track__mark" aria-hidden="true"></span>${esc(isRecording() ? RECORDING_TRACK[id] ?? text : text)}</li>`).join("");
   const eta = $("[data-eta]"), m = Number(st.eta_minutes);
   eta.hidden = !(st.eta_minutes != null && m >= 0);
   eta.textContent = m <= 1 ? "Almost there." : `About ${Math.round(m)} minutes to go.`;
@@ -270,12 +274,12 @@ async function ready(st) {
     $("[data-invoice-example]").hidden = false;
     $("[data-invoice-text]").textContent = invoiceText;
     $("[data-example=invoice]").hidden = recordingView === "tiered";
-    $("[data-example=records]").hidden = recordingView !== "tiered";
+    $("[data-example=records]").hidden = tiers.length < 2;
     $("[data-empty] p").textContent = "Start with the sample invoice.";
     const next = $("[data-recording-next]");
     next.hidden = st.recording !== "preview";
-    next.href = recordingView === "tiered" ? "/recording/finance" : "/demo?recording=tiered";
-    next.textContent = recordingView === "tiered" ? "Open Invoice Review preview" : "Try the two-model server";
+    next.href = tiers.length > 1 ? "/recording/finance" : "/demo?recording=tiered";
+    next.textContent = tiers.length > 1 ? "Open Invoice Review preview" : "Try the two-model server";
   }
   if (!chat.started) { chat.started = true; show("chat"); }
 }

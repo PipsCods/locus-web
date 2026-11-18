@@ -181,7 +181,7 @@ async function chat(req, res) {
   const think = body.thinking ? pieces(THOUGHTS[kind]) : [];
   // "echo: <text>" streams the text back as the answer: handy to check what the page does with hostile markdown
   const echo = /^echo:\s?([\s\S]*)$/.exec(last)?.[1];
-  const words = pieces(echo ?? recordingAnswer(recording, body.model, last) ?? ANSWERS[kind]);
+  const words = pieces(echo ?? recordingAnswer(recording, last) ?? ANSWERS[kind]);
   const promptN = Math.round(body.messages.reduce((n, m) => n + String(m.content ?? "").length, 0) / 3.8);
   const speed = 38 + Math.random() * 8; // tokens a second, about what the benchmark aims for
 

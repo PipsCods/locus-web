@@ -38,7 +38,7 @@
     <section class="demo__view" data-view="recording" hidden>
       <header class="check__head recording__head">
         <h1>Try AI on your server.</h1>
-        <p class="lead">Choose the server you already own and what you want to do with it.</p>
+        <p class="lead">Choose the server you already own and how many people will use AI at the same time.</p>
       </header>
       <form class="recording__form" data-recording-form>
         <fieldset class="step">
@@ -46,8 +46,8 @@
           <div class="recording__choices" data-recording-profiles></div>
         </fieldset>
         <fieldset class="step">
-          <legend>Workload</legend>
-          <div class="recording__choices" data-recording-workload></div>
+          <legend>Concurrent users</legend>
+          <div class="recording__choices" data-recording-users></div>
         </fieldset>
         <fieldset class="step">
           <legend>Validation key</legend>
@@ -64,7 +64,7 @@
       <section class="recording__result" data-recommendation aria-labelledby="recording-result-title" hidden>
         <p class="label">Recommended setup</p>
         <h2 id="recording-result-title" tabindex="-1"><span data-rec-gpu></span><span data-rec-model></span></h2>
-        <p class="side__text">The model uses the server’s CPU and memory alongside the GPU.</p>
+        <p class="side__text">Flash-Next uses the server’s CPU and memory alongside a GPU.</p>
         <p class="recording__availability" data-rec-availability role="status"></p>
         <button class="btn" type="button" data-reserve>Reserve demo server</button>
       </section>

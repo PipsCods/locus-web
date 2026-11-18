@@ -1,4 +1,4 @@
-import { PROFILES, RECOMMENDATION, WORKLOAD } from "../../../prototype/shared/recording.js";
+import { PROFILES, setupForUsers, userOptions } from "../../../prototype/shared/recording.js";
 import { getDemo } from "./db.js";
 import { fail, json, readJson, sessionCookie } from "./http.js";
 import { offerQuery } from "./offers.js";
@@ -14,7 +14,7 @@ const MIN = 60_000;
 export const isLoopback = (url) => ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
 
 export function recordingCatalog(_request, deps) {
-  return json({ ok: true, recording: deps.cfg.devFakes ? "preview" : "private", profiles: PROFILES, workload: WORKLOAD });
+  return json({ ok: true, recording: deps.cfg.devFakes ? "preview" : "private", profiles: PROFILES, users: userOptions });
 }
 
 export async function takeDemoId(take) {
@@ -36,7 +36,7 @@ async function input(request, deps) {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(take) || key.length < 16 || !(duration > 0) ||
       !(maxDph > 0 && cfg.vastMaxDph > 0) || !cfg.vastImage || !cfg.demoDomain ||
       (!cfg.devFakes && (!Number.isSafeInteger(offerId) || offerId < 1 || !cfg.vastKey || !cfg.cfApiToken ||
-        !cfg.cfAccountId || !cfg.cfZoneId || !cfg.modelRepo || !cfg.modelFiles || !cfg.llamaArgs))) {
+        !cfg.cfAccountId || !cfg.cfZoneId))) {
     return { error: fail(503, "This recording take is not armed.") };
   }
 
@@ -48,19 +48,28 @@ async function input(request, deps) {
   const { body, error } = await readJson(request, 2000);
   if (error) return { error: fail(error, "Bad request.") };
   if (!matchesKey(body?.key, key)) return { error: fail(401, "The validation key is incorrect.") };
-  if (!PROFILES.some(({ id }) => id === body.profile) || body.workload !== WORKLOAD.id) {
-    return { error: fail(400, "Choose a server and workload.") };
+  const setup = setupForUsers(body?.users);
+  if (!PROFILES.some(({ id }) => id === body?.profile) || !setup) {
+    return { error: fail(400, "Choose a server and number of users.") };
   }
-  return { profile: body.profile, demoId: await takeDemoId(take) };
+  return { profile: body.profile, setup, demoId: await takeDemoId(take) };
 }
 
-export async function recordingOffer(deps, profile, deadline, offerId = deps.cfg.recording.offerId) {
+function runtimeConfigured(cfg, gpuCount) {
+  if (cfg.devFakes) return true;
+  if (gpuCount === 1) return Boolean(cfg.modelRepo && cfg.modelFiles && cfg.llamaArgs);
+  const env = cfg.tieredEnv;
+  return Boolean(env && env.SERVERS.split(" ").sort().join(" ") === "DEEP FAST" &&
+    ["DEEP", "FAST"].every((tier) => ["REPO", "FILES", "RUNTIME", "CTX"].every((field) => env[`${tier}_${field}`])));
+}
+
+export async function recordingOffer(deps, profile, gpuCount, deadline, offerId = deps.cfg.recording.offerId) {
   const cpu = Object.hasOwn(CPU, profile) && CPU[profile];
-  if (!cpu) return null;
   const { cfg, vast } = deps;
+  if (!cpu || !runtimeConfigured(cfg, gpuCount)) return null;
   const maxDph = Math.min(cfg.vastMaxDph, cfg.recording.maxDph);
   const query = {
-    ...offerQuery({ ...cfg, vastNumGpus: 1, vastGpuName: "RTX 3090", vastRamTiersGb: [256], vastMaxDph: maxDph }),
+    ...offerQuery({ ...cfg, vastNumGpus: gpuCount, vastGpuName: "RTX 3090", vastRamTiersGb: [256], vastMaxDph: maxDph }),
     type: "on-demand",
     ...(offerId ? { id: { eq: offerId } } : {}),
     allocated_storage: cfg.vastDiskGb,
@@ -68,7 +77,7 @@ export async function recordingOffer(deps, profile, deadline, offerId = deps.cfg
     duration: { gte: Math.ceil((deadline - deps.now()) / 1000) },
   };
   const offers = await vast.searchOffers(query);
-  return offers.filter((o) => o && Number.isSafeInteger(o.id) && (!offerId || o.id === offerId) && o.num_gpus === 1 &&
+  return offers.filter((o) => o && Number.isSafeInteger(o.id) && (!offerId || o.id === offerId) && o.num_gpus === gpuCount &&
     /^RTX[ _]3090$/.test(o.gpu_name) && (o.verification === "verified" || o.verified === true) &&
     o.rentable === true && o.rented === false &&
     Number(o.cpu_ram) >= MIN_RAM_MB && cpu.test(o.cpu_name) && Number(o.cuda_max_good) >= 13 &&
@@ -79,24 +88,24 @@ export async function recordingOffer(deps, profile, deadline, offerId = deps.cfg
 }
 
 export async function recommendRecording(request, deps) {
-  const { error, profile, demoId } = await input(request, deps);
+  const { error, profile, setup, demoId } = await input(request, deps);
   if (error) return error;
   const existing = await getDemo(deps.db, demoId);
   const available = existing
-    ? existing.recording_profile === profile
-    : Boolean(await recordingOffer(deps, profile, Date.parse(deps.cfg.recording.expiresAt)));
-  return json({ ok: true, available, recommendation: RECOMMENDATION });
+    ? existing.recording_profile === profile && setupForUsers(existing.recording_users) === setup
+    : Boolean(await recordingOffer(deps, profile, setup.gpuCount, Date.parse(deps.cfg.recording.expiresAt)));
+  return json({ ok: true, available, recommendation: { gpu: setup.gpu, model: setup.model } });
 }
 
 export async function startRecording(request, deps) {
-  const { error, profile, demoId } = await input(request, deps);
+  const { error, profile, setup, demoId } = await input(request, deps);
   if (error) return error;
   const { cfg, db, workflows } = deps;
   const deadline = Date.parse(cfg.recording.expiresAt);
   let demo = await getDemo(db, demoId);
   if (!demo) {
     if (deadline - deps.now() < MIN) return fail(409, "This recording take is about to expire.");
-    const offer = await recordingOffer(deps, profile, deadline);
+    const offer = await recordingOffer(deps, profile, setup.gpuCount, deadline);
     if (!offer) return fail(409, "A matching offer is no longer available.");
     if ((await deps.vast.listInstances()).some((instance) => instance.label?.startsWith(cfg.resourcePrefix))) {
       // A previous take may have ended in D1 before Vast confirmed teardown.
@@ -108,16 +117,18 @@ export async function startRecording(request, deps) {
       const now = new Date(deps.now()).toISOString();
       await db.prepare(`
         INSERT OR IGNORE INTO demos
-          (id, email, domain, page, status, step, created_at, updated_at, booting_at, recording_profile, recording_expires_at, vast_offer_id)
-        SELECT ?, '', '', '/demo?recording=1', 'booting', 'reserving', ?, ?, ?, ?, ?, ?
+          (id, email, domain, page, status, step, created_at, updated_at, booting_at, recording_profile, recording_expires_at, vast_offer_id, recording_users)
+        SELECT ?, '', '', '/demo?recording=1', 'booting', 'reserving', ?, ?, ?, ?, ?, ?, ?
         WHERE NOT EXISTS (SELECT 1 FROM demos WHERE recording_profile IS NOT NULL AND status IN ('booting','ready'))
-      `).bind(demoId, now, now, now, profile, new Date(deadline).toISOString(), offer.id).run();
+      `).bind(demoId, now, now, now, profile, new Date(deadline).toISOString(), offer.id, Number(setup.id)).run();
       demo = await getDemo(db, demoId);
       if (!demo) return fail(409, "Another recording reservation is in progress.");
     }
   }
 
-  if (demo.recording_profile !== profile) return fail(409, "This take already has a server profile.");
+  if (demo.recording_profile !== profile || setupForUsers(demo.recording_users) !== setup) {
+    return fail(409, "This take already has a server setup.");
+  }
   if (demo.status === "booting") {
     const id = `prov-${demoId}`;
     try { await workflows.provision.create({ id, params: { demoId } }); }

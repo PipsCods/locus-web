@@ -41,7 +41,7 @@ export async function loadRecording() {
   if (loaded) return;
   const catalog = await call("catalog");
   form.querySelector("[data-recording-profiles]").replaceChildren(...catalog.profiles.map((p) => choice("profile", p)));
-  form.querySelector("[data-recording-workload]").replaceChildren(choice("workload", catalog.workload));
+  form.querySelector("[data-recording-users]").replaceChildren(...catalog.users.map((option) => choice("users", option)));
   loaded = true;
 }
 
