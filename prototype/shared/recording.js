@@ -1,8 +1,8 @@
 // Picker catalog used by the Worker and the local rehearsal.
 export const PROFILES = [
-  { id: "threadripper", name: "Threadripper PRO 9995WX", memory: "256 GB DDR5", ramGb: 256 },
-  { id: "epyc", name: "AMD EPYC 9004 / 9005", memory: "256 GB DDR5", ramGb: 256 },
-  { id: "epyc-7742", name: "AMD EPYC 7742", memory: "344 GB DDR4 allocated · PCIe 4.0 ×16", ramGb: 344 },
+  { id: "threadripper", name: "Threadripper PRO 9995WX", ramGb: 256 },
+  { id: "epyc", name: "AMD EPYC 9004 / 9005", ramGb: 256 },
+  { id: "epyc-7742", name: "AMD EPYC 7742", ramGb: 344 },
 ];
 export const RECORDING_MODELS = [
   { id: "fast", label: "Qwen3.8-27B" },

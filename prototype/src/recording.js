@@ -20,7 +20,7 @@ async function call(path, payload) {
   return data;
 }
 
-function choice(name, { id, name: title, memory }) {
+function choice(name, { id, name: title }) {
   const label = document.createElement("label");
   label.className = "opt";
   label.innerHTML = '<input type="radio" required><span class="opt__body"><strong></strong></span>';
@@ -28,12 +28,6 @@ function choice(name, { id, name: title, memory }) {
   input.name = name;
   input.value = id;
   label.querySelector("strong").textContent = title;
-  if (memory) {
-    const detail = document.createElement("span");
-    detail.className = "opt__note";
-    detail.textContent = memory;
-    label.lastElementChild.append(detail);
-  }
   return label;
 }
 
