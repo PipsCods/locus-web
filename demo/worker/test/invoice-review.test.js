@@ -19,14 +19,17 @@ async function recordingSession() {
   return {
     deps,
     status: (origin) => handle(new Request(`${origin}/api/demo/status`, { headers: { cookie } }), deps),
-    review: (origin) => handle(new Request(`${origin}/api/demo/chat`, {
+    review: (origin, mode = true) => handle(new Request(`${origin}/api/demo/chat`, {
       method: "POST", headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ invoice_review: true, model: "deep", messages: [{ role: "user", content: "browser-provided text" }] }),
+      body: JSON.stringify({ invoice_review: mode, model: mode === true ? "deep" : "fast", messages: [{ role: "user", content: "browser-provided text" }] }),
     }), deps),
   };
 }
 
-it("looks up the model-selected sample record through MCP and streams source data alongside the answer", async () => {
+it.each([
+  { mode: true, model: "fast", calls: ["model", "tools/call", "stream"] },
+  { mode: "resolution", model: "deep", calls: ["tools/call", "stream"] },
+])("streams the $model answer with the sample records retrieved through MCP", async ({ mode, model, calls: expectedCalls }) => {
   const { deps, status, review } = await recordingSession();
   const origin = "http://127.0.0.1:5174";
   expect(await (await status(origin)).json()).toMatchObject({ invoice_review: true });
@@ -46,7 +49,7 @@ it("looks up the model-selected sample record through MCP and streams source dat
       return Response.json({ jsonrpc: "2.0", id: body.id, result });
     }
     calls.push(body.stream ? "stream" : "model");
-    expect(body.model).toBe("fast");
+    expect(body.model).toBe(model);
     expect(JSON.stringify(body.messages)).not.toContain("browser-provided text");
     if (!body.stream) {
       expect(body.tools[0].function.name).toBe("get_purchase_order");
@@ -57,16 +60,23 @@ it("looks up the model-selected sample record through MCP and streams source dat
         } }],
       } }] });
     }
-    expect(body.messages.at(-1)).toMatchObject({ role: "tool", tool_call_id: "lookup" });
-    expect(JSON.parse(body.messages.at(-1).content).goods_receipt.id).toBe("GR-1842");
+    const last = body.messages.at(-1);
+    if (model === "fast") {
+      expect(last).toMatchObject({ role: "tool", tool_call_id: "lookup" });
+      expect(JSON.parse(last.content).goods_receipt.id).toBe("GR-1842");
+    } else {
+      expect(last.content).toContain("GR-1842");
+      expect(last.content).toContain("Draft a short email");
+      expect(last.content).toContain("holding invoice");
+    }
     return new Response('data: {"choices":[{"delta":{"content":"$900"}}]}\n\ndata: [DONE]\n\n');
   };
-  const res = await review(origin);
+  const res = await review(origin, mode);
   expect(res.status).toBe(200);
   const stream = await res.text();
   expect(stream).toContain('"invoice_sources"');
   expect(stream.indexOf("GR-1842")).toBeLessThan(stream.indexOf("$900"));
-  expect(calls).toEqual(["initialize", "notifications/initialized", "tools/list", "model", "tools/call", "stream"]);
+  expect(calls).toEqual(["initialize", "notifications/initialized", "tools/list", ...expectedCalls]);
 });
 
 it("keeps invoice review disabled on non-local requests", async () => {
@@ -75,4 +85,5 @@ it("keeps invoice review disabled on non-local requests", async () => {
   const origin = "https://site.test";
   expect((await (await status(origin)).json()).invoice_review).toBeUndefined();
   expect((await review(origin)).status).toBe(403);
+  expect((await review(origin, "resolution")).status).toBe(403);
 });

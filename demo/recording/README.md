@@ -141,8 +141,10 @@ records alongside its answer.
 Run the purchase-order MCP fixture with `uv run demo/recording/purchase_orders.py`
 from the repo root. It exposes one read-only tool at
 `http://127.0.0.1:8765/mcp`. In the locus chat sidebar, click **Check invoice
-against purchasing records**. Keep both source records and the $900
-discrepancy visible in the capture.
+against purchasing records** to select Fast and show the $900 discrepancy
+alongside the source records. In the same chat, click **Plan how to resolve
+the discrepancy** to select Deep. Show the supported amount, what evidence
+would confirm a separate shipment, and the draft supplier email.
 
 ### Open WebUI integration
 

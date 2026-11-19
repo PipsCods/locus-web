@@ -4,7 +4,7 @@
 // developing, vite.config.js stands in for it.
 
 import { cleanLead } from "../shared/lead.js";
-import { EXTRACT_INVOICE, CHECK_RECORDS, MATCH_INVOICE, invoiceText, usd } from "../shared/invoice.js";
+import { EXTRACT_INVOICE, CHECK_RECORDS, MATCH_INVOICE, PLAN_INVOICE_RESOLUTION, invoiceText, usd } from "../shared/invoice.js";
 import { bindRecording, loadRecording } from "./recording.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -273,9 +273,10 @@ async function ready(st) {
     $("[data-attach-panel]").hidden = true;
     $("[data-invoice-example]").hidden = false;
     $("[data-invoice-text]").textContent = invoiceText;
-    $("[data-example=invoice]").hidden = recordingView === "tiered";
-    $("[data-example=records]").hidden = tiers.length < 2;
-    $("[data-example=review]").hidden = !st.invoice_review;
+    $("[data-example=invoice]").hidden = recordingView === "tiered" || st.invoice_review;
+    $("[data-example=records]").hidden = tiers.length < 2 || st.invoice_review;
+    $("[data-example=fast-review]").hidden = !st.invoice_review;
+    $("[data-example=deep-review]").hidden = !st.invoice_review || !tiers.some(({ id }) => id === "deep");
     $("[data-empty] p").textContent = "Start with the sample invoice.";
     const next = $("[data-recording-next]");
     next.hidden = st.recording !== "preview" || tiers.length > 1;
@@ -451,8 +452,11 @@ async function answer() {
   // with a picker, the stream names the model that answered (Auto may choose either)
   const m = { role: "assistant", content: "", reasoning: "", started: Date.now(), named: !pickEl.hidden };
   const history = chat.msgs.filter((x) => x.role === "user" || x.end !== "error").map(({ role, content }) => ({ role, content }));
-  const invoiceReview = Boolean(chat.msgs.findLast(({ role }) => role === "user")?.invoiceReview);
-  if (invoiceReview) $("[data-purchasing-records]").hidden = true;
+  const invoiceReview = chat.msgs.findLast(({ role }) => role === "user")?.invoiceReview;
+  if (invoiceReview) {
+    const model = invoiceReview === "resolution" ? "deep" : "fast";
+    pickInputs.find((input) => input.value === model).checked = true;
+  }
   chat.msgs.push(m);
   addMessage(m);
   pinned = true;
@@ -465,7 +469,7 @@ async function answer() {
     const res = await fetch("/api/demo/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: history, thinking: thinkEl.checked, model: pickedModel(), ...(invoiceReview ? { invoice_review: true } : {}) }),
+      body: JSON.stringify({ messages: history, thinking: thinkEl.checked, model: pickedModel(), ...(invoiceReview ? { invoice_review: invoiceReview } : {}) }),
       signal: ctrl.signal,
     });
     if (!res.ok || !res.body) {
@@ -593,12 +597,11 @@ let sampleText = null;
 document.querySelector(".chat__side").addEventListener("click", async (ev) => {
   const b = ev.target.closest("[data-example]");
   if (!b || chat.busy || chat.over) return;
-  if (b.dataset.example === "review") {
+  if (b.dataset.example === "fast-review" || b.dataset.example === "deep-review") {
     if (!status?.invoice_review) return;
-    const fast = pickInputs.find((input) => input.value === "fast");
-    if (fast) fast.checked = true;
     const doc = { name: "INV-1042.txt", text: invoiceText, chars: invoiceText.length };
-    return send(MATCH_INVOICE, doc, true);
+    const deep = b.dataset.example === "deep-review";
+    return send(deep ? PLAN_INVOICE_RESOLUTION : MATCH_INVOICE, doc, deep ? "resolution" : true);
   }
   if (b.dataset.example === "invoice" || b.dataset.example === "records") {
     const doc = { name: "INV-1042.txt", text: invoiceText, chars: invoiceText.length };

@@ -186,6 +186,8 @@ input.sr:focus-visible + label.ghost { outline: 2px solid var(--ink); outline-of
   transition: border-color 0.15s;
 }
 .prompt::after { content: "→"; color: var(--faint); transition: color 0.15s; }
+.prompt__model { margin-inline-start: auto; color: var(--soft); font-size: 0.75rem; }
+.prompt:has(.prompt__model)::after { display: none; }
 .prompt:hover:not(:disabled) { border-color: var(--green); }
 .prompt:hover:not(:disabled)::after { color: var(--ink); }
 .prompt:disabled { opacity: 0.45; cursor: default; }

@@ -1,4 +1,4 @@
-import { invoice, invoiceText, MATCH_INVOICE } from "../../../prototype/shared/invoice.js";
+import { invoice, invoiceText, MATCH_INVOICE, PLAN_INVOICE_RESOLUTION } from "../../../prototype/shared/invoice.js";
 import { fail } from "./http.js";
 import { isLoopback } from "./recording.js";
 
@@ -60,37 +60,53 @@ function invoiceSources(data) {
   };
 }
 
-export async function reviewInvoice(request, deps, upstream) {
-  if (!upstream.invoiceMcp) return fail(403, "Invoice review is unavailable for this session.");
-  // The recording exposes only the sample invoice and its one read-only tool.
+async function matchInvoice(mcp, complete) {
   const messages = [
     { role: "system", content: "Review the invoice using the purchase order and goods receipt. Call get_purchase_order before answering. After the lookup, answer in three short bullets reporting the billed amount, the quantities in both source records, and the discrepancy with arithmetic. Bold the discrepancy." },
     { role: "user", content: `${invoiceText}\n\n${MATCH_INVOICE}` },
   ];
+  const tool = { type: "function", function: { name: TOOL, description: mcp.tool.description, parameters: mcp.tool.inputSchema } };
+  const response = await complete({ messages, tools: [tool], stream: false, max_tokens: 256 });
+  if (!response.ok) throw new Error("The model could not start the purchase-order lookup");
+  const reply = (await response.json()).choices?.[0]?.message;
+  const calls = reply?.tool_calls;
+  const call = calls?.[0];
+  if (calls?.length !== 1 || !call.id || call.function?.name !== TOOL) throw new Error("The model did not request a purchase order");
+  const args = JSON.parse(call.function.arguments);
+  if (args?.purchase_order_id !== invoice.purchaseOrder) throw new Error("The model requested a different purchase order");
+  const sources = invoiceSources(await mcp.call({ purchase_order_id: args.purchase_order_id }));
+  messages.push(
+    { role: "assistant", content: reply.content, tool_calls: calls },
+    { role: "tool", tool_call_id: call.id, content: JSON.stringify(sources) },
+  );
+  return { sources, params: { messages, tools: [tool], tool_choice: "none" } };
+}
+
+async function planResolution(mcp) {
+  const sources = invoiceSources(await mcp.call({ purchase_order_id: invoice.purchaseOrder }));
+  const messages = [
+    { role: "system", content: "You assist accounts payable. Use the supplied invoice and purchasing records as evidence. Finance has already placed the entire invoice on hold. Keep it on hold while the discrepancy is open, including the portion supported by records. In 120 words or fewer, give the supported amount, say how receiving should verify proof of delivery against the existing order if the supplier claims a split shipment, and draft a short email requesting proof of delivery or a corrected invoice. Draft only." },
+    { role: "user", content: `${invoiceText}\n\nPurchasing records:\n${JSON.stringify(sources)}\n\n${PLAN_INVOICE_RESOLUTION}` },
+  ];
+  return { sources, params: { messages } };
+}
+
+export async function reviewInvoice(request, deps, upstream, resolution) {
+  const model = resolution ? "deep" : "fast";
+  if (!upstream.invoiceMcp || !upstream.models.some(({ id }) => id === model)) {
+    return fail(403, "Invoice review is unavailable for this session.");
+  }
   const headers = { authorization: `Bearer ${upstream.key}`, "content-type": "application/json" };
-  const modelBody = { model: "fast", temperature: 0, chat_template_kwargs: { [deps.cfg.thinkingKwarg]: false } };
+  const modelBody = { model, temperature: 0, chat_template_kwargs: { [deps.cfg.thinkingKwarg]: false } };
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(45_000)]);
-  const complete = (params, signal) => deps.fetchFn(`${upstream.url}/v1/chat/completions`, {
+  const complete = (params) => deps.fetchFn(`${upstream.url}/v1/chat/completions`, {
     method: "POST", headers, signal, body: JSON.stringify({ ...modelBody, ...params }),
   });
 
   try {
     const mcp = await purchaseOrderTool(deps.fetchFn, upstream.invoiceMcp, signal);
-    const tool = { type: "function", function: { name: TOOL, description: mcp.tool.description, parameters: mcp.tool.inputSchema } };
-    const response = await complete({ messages, tools: [tool], stream: false, max_tokens: 256 }, signal);
-    if (!response.ok) throw new Error("The model could not start the purchase-order lookup");
-    const reply = (await response.json()).choices?.[0]?.message;
-    const calls = reply?.tool_calls;
-    const call = calls?.[0];
-    if (calls?.length !== 1 || !call.id || call.function?.name !== TOOL) throw new Error("The model did not request a purchase order");
-    const args = JSON.parse(call.function.arguments);
-    if (args?.purchase_order_id !== invoice.purchaseOrder) throw new Error("The model requested a different purchase order");
-    const sources = invoiceSources(await mcp.call({ purchase_order_id: args.purchase_order_id }));
-    messages.push(
-      { role: "assistant", content: reply.content, tool_calls: calls },
-      { role: "tool", tool_call_id: call.id, content: JSON.stringify(sources) },
-    );
-    const answer = await complete({ messages, tools: [tool], tool_choice: "none", stream: true, max_tokens: 600 }, signal);
+    const { sources, params } = await (resolution ? planResolution(mcp) : matchInvoice(mcp, complete));
+    const answer = await complete({ ...params, stream: true, max_tokens: Math.min(600, deps.cfg.chatMaxTokens) });
     if (!answer.ok || !answer.body) throw new Error("The model could not finish the invoice review");
     const sourceEvent = new TextEncoder().encode(`data: ${JSON.stringify({ invoice_sources: sources })}\n\n`);
     const withSources = new TransformStream({ start(controller) { controller.enqueue(sourceEvent); } });

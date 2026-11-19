@@ -178,7 +178,9 @@ export async function chat(request, deps) {
   for (const m of messages) {
     if (!m || !["system", "user", "assistant"].includes(m.role) || typeof m.content !== "string") return fail(400, "Bad request: messages.");
   }
-  if (body.invoice_review === true) return reviewInvoice(request, deps, up);
+  if (body.invoice_review === true || body.invoice_review === "resolution") {
+    return reviewInvoice(request, deps, up, body.invoice_review === "resolution");
+  }
   // a tiered box takes a model pick; a single-model box ignores the field
   const { models } = up;
   const model = models.length && body.model !== undefined && body.model !== null ? body.model : undefined;

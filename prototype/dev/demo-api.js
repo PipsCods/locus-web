@@ -177,17 +177,19 @@ async function chat(req, res) {
     return send(res, 400, { ok: false, error: "Bad request: model." });
   }
 
-  if (body.invoice_review === true && !recording?.invoice_review) {
+  const resolution = body.invoice_review === "resolution";
+  const reviewRequested = resolution || body.invoice_review === true;
+  if (reviewRequested && !recording?.invoice_review) {
     return send(res, 403, { ok: false, error: "Invoice review is unavailable for this session." });
   }
-  const review = body.invoice_review === true ? previewInvoiceReview() : null;
+  const review = reviewRequested ? previewInvoiceReview() : null;
   const last = String(body.messages.at(-1)?.content ?? "");
   const kind = topic(last.split("</document>").at(-1));
   const think = body.thinking ? pieces(THOUGHTS[kind]) : [];
   // "echo: <text>" streams the text back as the answer: handy to check what the page does with hostile markdown
   const echo = /^echo:\s?([\s\S]*)$/.exec(last)?.[1];
   const answer = review
-    ? `The invoice bills for ${invoice.units} units. ${review.source.purchase_order.id} and ${review.source.goods_receipt.id} both show ${review.source.goods_receipt.units} units. The extra ${review.excess} units at ${usd(invoice.unitPrice)} each are a **${usd(review.discrepancy)} discrepancy**.`
+    ? previewReviewAnswer(review, resolution)
     : echo ?? recordingAnswer(recording, last) ?? ANSWERS[kind];
   const words = pieces(answer);
   const promptN = Math.round(body.messages.reduce((n, m) => n + String(m.content ?? "").length, 0) / 3.8);
@@ -198,7 +200,8 @@ async function chat(req, res) {
   res.setHeader("cache-control", "no-cache");
   res.setHeader("connection", "keep-alive");
   // Auto: a stand-in for the router's pick, so the page can be seen naming either model
-  const tier = !p.models || !body.model ? null : body.model !== "auto" ? body.model : body.thinking || last.length > 2000 ? "deep" : "fast";
+  const tier = review ? (resolution ? "deep" : "fast")
+    : !p.models || !body.model ? null : body.model !== "auto" ? body.model : body.thinking || last.length > 2000 ? "deep" : "fast";
   const id = `chatcmpl-dev${Date.now()}`, created = Math.floor(Date.now() / 1000), model = tier ? labelOf(tier) : "Qwen3.8-Flash-Next";
   const chunk = (delta, extra = {}) => res.write(`data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model, system_fingerprint: "dev", choices: [{ index: 0, delta, finish_reason: null }], ...extra })}\n\n`);
 
@@ -218,6 +221,14 @@ async function chat(req, res) {
   res.write(`data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model, choices: [{ index: 0, delta: {}, finish_reason: "stop" }], timings })}\n\n`);
   res.write("data: [DONE]\n\n");
   res.end();
+}
+
+function previewReviewAnswer(review, resolution) {
+  const { purchase_order: order, goods_receipt: receipt } = review.source;
+  if (resolution) {
+    return `**Payment review**\n\nThe records support **${usd(receipt.units * receipt.unit_price_usd)}** for the ${receipt.units} units received. Keep the invoice on hold while finance resolves the **${usd(review.discrepancy)}** difference. If the supplier says the remaining ${review.excess} units arrived separately, ask for proof of delivery and have receiving confirm it against the purchase order. Otherwise, ask for a corrected invoice or credit.\n\n**Draft email**\n\nHi ${invoice.supplier}, our receipt ${receipt.id} for ${order.id} shows ${receipt.units} units, while invoice ${invoice.id} bills for ${invoice.units}. Could you send proof of delivery for the remaining ${review.excess} units or issue a corrected invoice or credit? Thank you.`;
+  }
+  return `The invoice bills for ${invoice.units} units. ${order.id} and ${receipt.id} both show ${receipt.units} units. The extra ${review.excess} units at ${usd(invoice.unitPrice)} each are a **${usd(review.discrepancy)} discrepancy**.`;
 }
 
 export function demoApi(req, res, next) {
