@@ -4,7 +4,7 @@
 // developing, vite.config.js stands in for it.
 
 import { cleanLead } from "../shared/lead.js";
-import { EXTRACT_INVOICE, CHECK_RECORDS, MATCH_INVOICE, PLAN_INVOICE_RESOLUTION, invoiceText, usd } from "../shared/invoice.js";
+import { EXTRACT_INVOICE, CHECK_RECORDS, MATCH_INVOICE, REVIEW_BEFORE_PAYMENT, invoiceText, usd } from "../shared/invoice.js";
 import { bindRecording, loadRecording } from "./recording.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -601,7 +601,7 @@ document.querySelector(".chat__side").addEventListener("click", async (ev) => {
     if (!status?.invoice_review) return;
     const doc = { name: "INV-1042.txt", text: invoiceText, chars: invoiceText.length };
     const deep = b.dataset.example === "deep-review";
-    return send(deep ? PLAN_INVOICE_RESOLUTION : MATCH_INVOICE, doc, deep ? "resolution" : true);
+    return send(deep ? REVIEW_BEFORE_PAYMENT : MATCH_INVOICE, doc, deep ? "resolution" : true);
   }
   if (b.dataset.example === "invoice" || b.dataset.example === "records") {
     const doc = { name: "INV-1042.txt", text: invoiceText, chars: invoiceText.length };

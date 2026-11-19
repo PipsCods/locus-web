@@ -66,8 +66,8 @@ it.each([
       expect(JSON.parse(last.content).goods_receipt.id).toBe("GR-1842");
     } else {
       expect(last.content).toContain("GR-1842");
-      expect(last.content).toContain("Draft a short email");
-      expect(last.content).toContain("holding invoice");
+      expect(last.content).toContain("is anything missing or inconsistent?");
+      expect(last.content).toContain("If we need information from the supplier");
     }
     return new Response('data: {"choices":[{"delta":{"content":"$900"}}]}\n\ndata: [DONE]\n\n');
   };

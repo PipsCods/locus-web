@@ -1,4 +1,4 @@
-import { invoice, invoiceText, MATCH_INVOICE, PLAN_INVOICE_RESOLUTION } from "../../../prototype/shared/invoice.js";
+import { invoice, invoiceText, MATCH_INVOICE, REVIEW_BEFORE_PAYMENT } from "../../../prototype/shared/invoice.js";
 import { fail } from "./http.js";
 import { isLoopback } from "./recording.js";
 
@@ -82,11 +82,11 @@ async function matchInvoice(mcp, complete) {
   return { sources, params: { messages, tools: [tool], tool_choice: "none" } };
 }
 
-async function planResolution(mcp) {
+async function reviewBeforePayment(mcp) {
   const sources = invoiceSources(await mcp.call({ purchase_order_id: invoice.purchaseOrder }));
   const messages = [
-    { role: "system", content: "You assist accounts payable. Use the supplied invoice and purchasing records as evidence. Finance has already placed the entire invoice on hold. Keep it on hold while the discrepancy is open, including the portion supported by records. In 120 words or fewer, give the supported amount, say how receiving should verify proof of delivery against the existing order if the supplier claims a split shipment, and draft a short email requesting proof of delivery or a corrected invoice. Draft only." },
-    { role: "user", content: `${invoiceText}\n\nPurchasing records:\n${JSON.stringify(sources)}\n\n${PLAN_INVOICE_RESOLUTION}` },
+    { role: "system", content: "You assist accounts payable. In 120 words or fewer, assess the invoice against the purchase order and goods receipt and state the amount supported by the records. If the records agree, recommend sending the invoice through normal approval. If anything is missing or inconsistent, recommend holding the entire invoice pending verification and explain what would resolve the issue. Draft a short email only if information or a correction is needed from the supplier. Your review does not authorize payment." },
+    { role: "user", content: `${invoiceText}\n\nPurchasing records:\n${JSON.stringify(sources)}\n\n${REVIEW_BEFORE_PAYMENT}` },
   ];
   return { sources, params: { messages } };
 }
@@ -105,7 +105,7 @@ export async function reviewInvoice(request, deps, upstream, resolution) {
 
   try {
     const mcp = await purchaseOrderTool(deps.fetchFn, upstream.invoiceMcp, signal);
-    const { sources, params } = await (resolution ? planResolution(mcp) : matchInvoice(mcp, complete));
+    const { sources, params } = await (resolution ? reviewBeforePayment(mcp) : matchInvoice(mcp, complete));
     const answer = await complete({ ...params, stream: true, max_tokens: Math.min(600, deps.cfg.chatMaxTokens) });
     if (!answer.ok || !answer.body) throw new Error("The model could not finish the invoice review");
     const sourceEvent = new TextEncoder().encode(`data: ${JSON.stringify({ invoice_sources: sources })}\n\n`);

@@ -23,4 +23,4 @@ export const invoiceText = [
 export const EXTRACT_INVOICE = "What is the invoice total and purchase order reference?";
 export const CHECK_RECORDS = "What records would you check before paying this invoice?";
 export const MATCH_INVOICE = `Does invoice ${invoice.id} match ${invoice.purchaseOrder} and the goods receipt?`;
-export const PLAN_INVOICE_RESOLUTION = `Finance is holding invoice ${invoice.id} until the discrepancy is resolved. What amount do the records support? What should we verify if the supplier says the rest shipped separately? Draft a short email asking the supplier to resolve the discrepancy.`;
+export const REVIEW_BEFORE_PAYMENT = `Review invoice ${invoice.id} before payment. What amount do the records support, and is anything missing or inconsistent? Recommend the next step. If we need information from the supplier, draft a short email asking for it.`;
