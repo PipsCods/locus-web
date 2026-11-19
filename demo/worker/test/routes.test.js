@@ -135,6 +135,18 @@ describe("manual mode (Phase 2)", () => {
     expect(llama.calls[0].auth).toBe("Bearer box-key");
   });
 
+  it("lists the models when CHAT_MODELS is set, and forwards the pick to the machine", async () => {
+    const { deps, llama } = makeTestDeps({ vars: { ...vars, CHAT_MODELS: "auto:Auto,deep:Qwen3.8-Flash-Next,fast:Qwen3.8-27B" } });
+    const cookie = cookieFrom(await handle(req("/api/demo/manual?key=open-sesame-open-sesame"), deps));
+    const s = await (await handle(req("/api/demo/status", { headers: { cookie } }), deps)).json();
+    expect(s).toMatchObject({ status: "ready", model: "Qwen3.8-Flash-Next" });
+    expect(s.models.map((m) => m.id)).toEqual(["auto", "deep", "fast"]);
+    const chat = await handle(postJson("/api/demo/chat", { messages: [{ role: "user", content: "hi" }], model: "deep" }, { cookie }), deps);
+    expect(chat.status).toBe(200);
+    await chat.text();
+    expect(llama.calls[0].body.model).toBe("deep");
+  });
+
   it("is off without the upstream vars, and ends at MANUAL_ENDS_AT", async () => {
     const { deps } = makeTestDeps();
     expect((await handle(req("/api/demo/manual?key=open-sesame-open-sesame"), deps)).status).toBe(404);

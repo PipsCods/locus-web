@@ -30,7 +30,8 @@ export function planSweep({ instances, tunnels, dns, demos, workflows = {}, now,
 
   // 1. demos whose time is up, whatever happened to their Workflow
   for (const d of Object.values(demos)) {
-    if (d.status === "ready" && d.ends_at && now > Date.parse(d.ends_at) + grace) closing.set(d.id, "ended");
+    if (ACTIVE.includes(d.status) && Date.parse(d.recording_expires_at) <= now) closing.set(d.id, "ended");
+    else if (d.status === "ready" && d.ends_at && now > Date.parse(d.ends_at) + grace) closing.set(d.id, "ended");
     else if (d.status === "booting" && now > Date.parse(d.booting_at ?? d.updated_at) + bootBudget) closing.set(d.id, "failed");
     else if (ACTIVE.includes(d.status) && DEAD_WORKFLOW.has(workflows[d.id]) && now > Date.parse(d.updated_at) + grace) closing.set(d.id, d.status === "ready" ? "ended" : "failed");
     else if (d.status === "queued" && now > Date.parse(d.queued_at ?? d.updated_at) + cfg.caps.queueMaxHours * 3600_000) closing.set(d.id, "failed");
@@ -95,11 +96,15 @@ export async function runSweep(deps, { maxActions = 12 } = {}) {
   for (const x of tunnels) if (x.name?.startsWith(prefix)) ids.add(x.name.slice(prefix.length));
   for (const x of dns) if (x.name?.startsWith(prefix)) ids.add(x.name.slice(prefix.length).split(".")[0]);
   const demos = {};
-  for (const row of await listByStatus(db, ["booting", "ready", "queued"])) demos[row.id] = row;
+  for (const row of await listByStatus(db, ["booting", "ready", "queued"])) {
+    if (Boolean(row.recording_profile) === Boolean(cfg.recording)) demos[row.id] = row;
+  }
   const missing = [...ids].filter((id) => !demos[id] && /^[0-9a-f]{20}$/.test(id));
   if (missing.length) {
     const rows = await db.prepare(`SELECT * FROM demos WHERE id IN (${missing.map(() => "?").join(",")})`).bind(...missing).all();
-    for (const row of rows.results ?? []) demos[row.id] = row;
+    for (const row of rows.results ?? []) {
+      if (Boolean(row.recording_profile) === Boolean(cfg.recording)) demos[row.id] = row;
+    }
   }
   const workflows = {};
   for (const d of Object.values(demos)) if (ACTIVE.includes(d.status) && deps.workflows?.provision) workflows[d.id] = await workflowStatus(deps.workflows.provision, d.id);

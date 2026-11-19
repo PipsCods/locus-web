@@ -7,6 +7,7 @@
 .demo__turnstile { margin-top: 16px; }
 .demo__turnstile:empty { margin-top: 0; }
 .demo__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-top: 8px; }
+.demo__actions[hidden] { display: none; }
 .check__head strong { font-weight: 500; color: var(--ink); }
 
 /* ── the wait: where the server stands ── */
@@ -149,6 +150,19 @@ input.sr:focus-visible + label.ghost { outline: 2px solid var(--ink); outline-of
 .switch input:disabled + .switch__track { opacity: 0.5; }
 .switch__hint { color: var(--faint); font-size: 0.8125rem; }
 
+/* which model answers (a tiered box only): Auto · Deep · Fast, green like the switch, never pink */
+.pick { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+.pick[hidden] { display: none; }
+.pick__opt { position: relative; display: inline-flex; cursor: pointer; }
+.pick__opt[hidden] { display: none; }
+.pick__opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.pick__opt span:not(.sr) { padding: 6px 10px; border: 1px solid transparent; border-radius: 6px; color: var(--soft); font: 500 0.8125rem/1 var(--sans); transition: background-color 0.15s, border-color 0.15s, color 0.15s; }
+.pick__opt:hover span:not(.sr) { color: var(--ink); }
+.pick__opt input:checked + span { border-color: var(--green); background: var(--green); color: var(--ink); }
+.pick__opt input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: 2px; }
+.pick__opt input:disabled + span { opacity: 0.5; cursor: default; }
+.pick__opt:has(input:disabled) { cursor: default; }
+
 /* ── the side: example report and uploads ── */
 .side { display: grid; gap: 10px; justify-items: start; padding: 18px 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
 .side h2 { font-size: 1.25rem; letter-spacing: -0.02em; line-height: 1.2; }
@@ -172,6 +186,8 @@ input.sr:focus-visible + label.ghost { outline: 2px solid var(--ink); outline-of
   transition: border-color 0.15s;
 }
 .prompt::after { content: "→"; color: var(--faint); transition: color 0.15s; }
+.prompt__model { margin-inline-start: auto; color: var(--soft); font-size: 0.75rem; }
+.prompt:has(.prompt__model)::after { display: none; }
 .prompt:hover:not(:disabled) { border-color: var(--green); }
 .prompt:hover:not(:disabled)::after { color: var(--ink); }
 .prompt:disabled { opacity: 0.45; cursor: default; }
@@ -198,3 +214,61 @@ input.sr:focus-visible + label.ghost { outline: 2px solid var(--ink); outline-of
 .devbar span { padding: 5px 4px; color: var(--faint); }
 .devbar a { padding: 5px 6px; border-radius: 4px; color: var(--soft); text-decoration: none; }
 .devbar a[aria-current] { background: var(--ink); color: var(--black); }
+
+/* Local recording picker */
+.recording__mode {
+  width: fit-content;
+  margin-bottom: 22px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--soft);
+}
+
+.demo__view[data-view="recording"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.62fr);
+  gap: 22px 30px;
+  align-items: start;
+}
+
+.demo__view[data-view="recording"][hidden] { display: none; }
+.recording__head { grid-column: 1 / -1; }
+.demo__view .recording__head { margin-bottom: 4px; }
+.recording__form { display: grid; gap: 20px; }
+.recording__choices { display: flex; flex-wrap: wrap; gap: 10px; }
+.recording__choices .opt { flex: 1 1 200px; }
+.recording__choices[data-recording-profiles] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 165px), 1fr));
+}
+.recording__choices input:checked + .opt__body { border-color: var(--ink); background: var(--forest); }
+.recording__key { margin-top: 0; }
+.recording__form .field__error { margin-top: 0; }
+.recording__result {
+  display: grid;
+  gap: 14px;
+  padding: clamp(18px, 2.6vw, 28px);
+  border: 1px solid var(--green);
+  border-radius: 14px;
+  background: var(--forest);
+}
+.recording__result[hidden], .side[hidden], .prompt[hidden] { display: none; }
+.recording__result h2 { display: grid; gap: 4px; font-size: clamp(1.45rem, 2.6vw, 2.1rem); }
+.recording__result h2 span + span { color: var(--soft); font-size: 0.77em; }
+.recording__availability { color: var(--soft); font-size: 0.875rem; }
+.recording__availability.is-unavailable { color: var(--error); }
+.recording__result .btn { width: fit-content; border: 0; cursor: pointer; }
+.recording__result .btn:disabled { opacity: 0.45; cursor: default; }
+.recording__invoice { min-width: 0; max-width: 100%; }
+.recording__invoice pre { margin: 10px 0 0; color: var(--soft); font: 0.8rem/1.6 var(--mono); white-space: pre-wrap; }
+.recording__invoice summary { cursor: pointer; font-size: 0.875rem; }
+.side__records { display: grid; gap: 10px; width: 100%; margin: 0; }
+.side__records div { padding-top: 10px; border-top: 1px solid var(--line); }
+.side__records dt { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; font-size: 0.875rem; }
+.side__records dd { margin: 4px 0 0; color: var(--soft); font-size: 0.875rem; }
+[data-recording-next] { margin-top: 8px; }
+
+@media (max-width: 760px) {
+  .demo__view[data-view="recording"] { grid-template-columns: minmax(0, 1fr); }
+}

@@ -42,6 +42,32 @@ describe("offers", () => {
     expect(spec.env).toBe('-e MODEL_REPO=Qwen/X -e MODEL_FILES=a.gguf -e RUNTIME=ik -e LLAMA_ARGS="-ngl 99 --n-cpu-moe 40" -e LLAMA_API_KEY=k1 -e CF_TUNNEL_TOKEN=tok -e DEMO_TTL_SECONDS=10800');
     expect(() => envString({ X: 'a"b' })).toThrow();
   });
+  it("VAST_NUM_GPUS sets the query and which offers are picked", () => {
+    const two = config({ VAST_NUM_GPUS: "2", VAST_GPU_NAME: "RTX 3090" });
+    expect(offerQuery(two)).toMatchObject({ num_gpus: { eq: 2 }, gpu_name: { eq: "RTX 3090" } });
+    const mixed = [...offers, { id: 9, machine_id: 9, num_gpus: 2, cpu_name: "AMD EPYC 7B13", cpu_ram: 250_000, dph_total: 0.9 }];
+    expect(pickOffer(mixed, { tiersGb: [192, 128], preferCpu: ["EPYC"] })).toMatchObject({ offer: { id: 2 } });
+    expect(pickOffer(mixed, { tiersGb: [192, 128], numGpus: 2 })).toMatchObject({ offer: { id: 9 }, tierGb: 192 });
+    expect(hardwareOf(mixed[3]).gpu).toBe("2× GPU");
+  });
+  it("tiered box: SERVERS and per-server vars replace the single-model vars", () => {
+    const cfg = config({
+      VAST_IMAGE: "img", MODEL_REPO: "ignored/X", MODEL_FILES: "x.gguf",
+      SERVERS: " DEEP  FAST ", DEEP_REPO: "unsloth/A", DEEP_FILES: "a-00001-of-00002.gguf a-00002-of-00002.gguf", DEEP_RUNTIME: "ik",
+      DEEP_ARGS: "-ncmoe 20 -t 28", DEEP_GPUS: "0", DEEP_SLOTS: "4", DEEP_CTX: "32768", DEEP_ALIAS: "Qwen3.8-Flash-Next",
+      FAST_REPO: "unsloth/B", FAST_FILES: "b.gguf", FAST_RUNTIME: "mainline", FAST_GPUS: "1,0", FAST_CTX: "16384",
+      ROUTER_POLICY: "difficulty+spill", ROUTER_DEFAULT: "",
+    });
+    const spec = instanceSpec(cfg, { demoId: "ab12", apiKey: "k1", tunnelToken: "tok" });
+    expect(spec.env).toBe(
+      '-e SERVERS="DEEP FAST" -e DEEP_REPO=unsloth/A -e DEEP_FILES="a-00001-of-00002.gguf a-00002-of-00002.gguf" -e DEEP_RUNTIME=ik'
+      + ' -e DEEP_ARGS="-ncmoe 20 -t 28" -e DEEP_GPUS=0 -e DEEP_ALIAS=Qwen3.8-Flash-Next -e DEEP_SLOTS=4 -e DEEP_CTX=32768'
+      + ' -e FAST_REPO=unsloth/B -e FAST_FILES=b.gguf -e FAST_RUNTIME=mainline -e FAST_GPUS=1,0 -e FAST_CTX=16384'
+      + ' -e ROUTER_POLICY=difficulty+spill -e LLAMA_API_KEY=k1 -e CF_TUNNEL_TOKEN=tok -e DEMO_TTL_SECONDS=10800');
+    expect(config({}).tieredEnv).toBeNull();
+    // a lower-case name cannot become an env var: renting fails loudly instead of booting a broken box
+    expect(() => instanceSpec(config({ SERVERS: "deep", deep_REPO: "x" }), { demoId: "ab12", apiKey: "k", tunnelToken: "t" })).toThrow(/bad env name/);
+  });
 });
 
 describe("provisioning workflow (fake step, fake clouds)", () => {

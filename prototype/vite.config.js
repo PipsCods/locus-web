@@ -4,6 +4,11 @@ import { fileURLToPath } from "node:url";
 import { cleanLead } from "./shared/lead.js";
 import { demoApi } from "./dev/demo-api.js";
 
+const recordingWorker = process.env.RECORDING_WORKER_URL;
+if (recordingWorker && !["localhost", "127.0.0.1"].includes(new URL(recordingWorker).hostname)) {
+  throw new Error("RECORDING_WORKER_URL must be a local Wrangler server.");
+}
+
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 
 // While developing there is no Cloudflare: this answers POST /api/lead with the same checks as the
@@ -14,6 +19,7 @@ const devLeads = () => ({
     // Cloudflare serves check.html at /check (and demo.html at /demo); do the same here so links work in both places
     server.middlewares.use((req, _res, next) => {
       const page = req.url?.match(/^\/(check|demo)(?=$|\?)/)?.[1];
+      if (req.url?.match(/^\/recording\/finance(?=$|\?)/)) req.url = req.url.replace("/recording/finance", "/dev/finance.html");
       if (page) req.url = req.url.replace(`/${page}`, `/${page}.html`);
       next();
     });
@@ -33,12 +39,13 @@ const devLeads = () => ({
       });
     });
     // and a stand-in for the live demo's API (dev/demo-api.js explains how to pick a status)
-    server.middlewares.use("/api/demo", demoApi);
+    if (!recordingWorker) server.middlewares.use("/api/demo", demoApi);
   },
 });
 
 export default defineConfig({
   plugins: [devLeads()],
+  server: recordingWorker ? { proxy: { "/api/demo": recordingWorker } } : {},
   build: {
     // four pages: the landing page, "Check your server", "Try it live", and the page shown for an address that does not exist
     rollupOptions: { input: { index: here("./index.html"), check: here("./check.html"), demo: here("./demo.html"), 404: here("./404.html") } },

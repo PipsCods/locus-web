@@ -8,6 +8,15 @@ import { requestDemo, confirm, status, chat, ownerDecide, manual } from "./route
 import { screen } from "./pipeline.js";
 import { provision } from "./provision.js";
 import { runSweep } from "./sweep.js";
+import { isLoopback, recordingCatalog, recommendRecording, startRecording } from "./recording.js";
+
+const RECORDING_ROUTES = {
+  "GET /api/demo/recording/catalog": recordingCatalog,
+  "POST /api/demo/recording/recommendation": recommendRecording,
+  "POST /api/demo/recording/start": startRecording,
+  "GET /api/demo/status": status,
+  "POST /api/demo/chat": chat,
+};
 
 const ROUTES = {
   "POST /api/demo/request": requestDemo,
@@ -20,8 +29,10 @@ const ROUTES = {
 
 export async function handle(request, deps) {
   const url = new URL(request.url);
-  const route = ROUTES[`${request.method} ${url.pathname.replace(/\/$/, "")}`];
-  if (!route) return fail(url.pathname.startsWith("/api/demo/") ? 404 : 404, "Not found.");
+  if (deps.cfg.recording && !isLoopback(url)) return fail(404, "Not found.");
+  const routes = deps.cfg.recording ? RECORDING_ROUTES : ROUTES;
+  const route = routes[`${request.method} ${url.pathname.replace(/\/$/, "")}`];
+  if (!route) return fail(404, "Not found.");
   if (!deps.cfg.secret || deps.cfg.secret.length < 32) {
     console.error("SIGNING_SECRET missing or too short");
     return fail(503, "The demo is not set up yet.");

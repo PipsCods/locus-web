@@ -4,6 +4,8 @@
 // developing, vite.config.js stands in for it.
 
 import { cleanLead } from "../shared/lead.js";
+import { EXTRACT_INVOICE, CHECK_RECORDS, MATCH_INVOICE, REVIEW_BEFORE_PAYMENT, invoiceText, usd } from "../shared/invoice.js";
+import { bindRecording, loadRecording } from "./recording.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -23,11 +25,14 @@ const EXAMPLES = {
   board: "Draft a short note to the board, under 200 words, on this quarter: what went well, what worries you, and two decisions to take before the end of the year.",
 };
 
+const recordingView = import.meta.env.DEV ? new URLSearchParams(location.search).get("recording") : null;
+const isRecording = () => Boolean(recordingView && status?.recording);
 const views = [...document.querySelectorAll("[data-view]")];
 const show = (name) => { for (const v of views) v.hidden = v.dataset.view !== name; };
 
 let status = null;     // the last answer from /api/demo/status
 let pollTimer = 0;
+let previewChatOpened = false;
 
 // ── status ──────────────────────────────────────────────────────
 
@@ -50,15 +55,29 @@ async function refresh() {
     return;
   }
   status = next;
-  draw();
+  const mode = $("[data-recording-mode]");
+  mode.hidden = !isRecording();
+  mode.textContent = next.recording === "preview" ? "Local preview · sample data" : "Private recording";
+  await draw();
 }
 
-function draw() {
+async function draw() {
   const s = status.status;
   if (chat.started && s !== "ready") { chatOver(s === "failed" ? "failed" : "ended"); return; } // keep the conversation on screen
-  if (s === "none") { request(); return; }
-  if (["checking", "review", "queued", "booting"].includes(s)) { wait(status); pollTimer = setTimeout(refresh, POLL_WAIT); return; }
-  if (s === "ready") { ready(status); pollTimer = setTimeout(refresh, POLL_READY); return; }
+  if (s === "none") {
+    if (recordingView === "1") {
+      try { await loadRecording(); show("recording"); }
+      catch { stop("unavailable"); }
+    } else request();
+    return;
+  }
+  if (["checking", "review", "queued", "booting"].includes(s)) { wait(status); pollTimer = setTimeout(refresh, isRecording() && status.recording === "preview" ? 1000 : POLL_WAIT); return; }
+  if (s === "ready") {
+    if (recordingView === "1" && status.recording === "preview" && !previewChatOpened) wait(status);
+    else await ready(status);
+    pollTimer = setTimeout(refresh, POLL_READY);
+    return;
+  }
   stop(["rejected", "failed", "ended"].includes(s) ? s : "unavailable");
 }
 
@@ -164,26 +183,42 @@ const TRACK = [
   ["ready", "Ready to use"],
 ];
 
+const RECORDING_TRACK = { check: "Matching server found", downloading: "Downloading model files" };
+
 const WAIT = {
   checking: ["Email confirmed", "We are checking your request.", "A few automatic checks run now. This usually takes a minute or two."],
   review: ["Email confirmed", "A person is looking at your request.", "The automatic checks could not decide, so one of us will. We email you either way, usually within one working day."],
   queued: ["Approved", "You are next in line for a server.", "Every demo server is in use right now. Yours starts as soon as one is free."],
   booting: ["Approved", "Your server is getting ready.", "We are setting up a server with one graphics card, just for you. The model is large, so this takes a while."],
+  ready: ["Demo server", "Your server is ready.", ""],
 };
 
 function wait(st) {
   const [label, title, lead] = WAIT[st.status];
-  $("[data-wait-label]").textContent = label;
+  const complete = st.status === "ready";
+  $("[data-wait-label]").textContent = isRecording() ? "Demo server" : label;
   $("[data-wait-title]").textContent = title;
-  $("[data-wait-lead]").textContent = lead;
-  const at = st.status === "booting" ? Math.max(1, TRACK.findIndex(([id]) => id === st.step)) : st.status === "queued" ? 1 : 0;
-  $("[data-track]").innerHTML = TRACK.map(([, text], i) =>
-    `<li class="${i < at ? "is-done" : i === at ? "is-now" : ""}"${i === at ? ' aria-current="step"' : ""}><span class="track__mark" aria-hidden="true"></span>${esc(text)}</li>`).join("");
+  $("[data-wait-lead]").textContent = isRecording() && st.status === "booting"
+    ? "We’re setting up your trial server and loading the model files."
+    : lead;
+  $("[data-wait-lead]").hidden = complete;
+  const at = complete ? TRACK.length : st.status === "booting" ? Math.max(1, TRACK.findIndex(([id]) => id === st.step)) : st.status === "queued" ? 1 : 0;
+  $("[data-wait-note]").textContent = isRecording()
+    ? (hardwareLine(st.hardware) || "Keep this page open to follow the reservation.")
+    : "You can close this tab. We will email you a link as soon as your server is ready, and your two hours start only then.";
+  $("[data-track]").innerHTML = TRACK.map(([id, text], i) =>
+    `<li class="${i < at ? "is-done" : i === at ? "is-now" : ""}"${i === at ? ' aria-current="step"' : ""}><span class="track__mark" aria-hidden="true"></span>${esc(isRecording() ? RECORDING_TRACK[id] ?? text : text)}</li>`).join("");
   const eta = $("[data-eta]"), m = Number(st.eta_minutes);
   eta.hidden = !(st.eta_minutes != null && m >= 0);
   eta.textContent = m <= 1 ? "Almost there." : `About ${Math.round(m)} minutes to go.`;
+  $("[data-preview-chat-action]").hidden = !complete;
   show("wait");
 }
+
+$("[data-preview-chat]").addEventListener("click", () => {
+  previewChatOpened = true;
+  refresh();
+});
 
 // ── rejected / failed / ended / unavailable ─────────────────────
 
@@ -200,6 +235,14 @@ const STOP = {
 
 function stop(kind) {
   const [label, title, lead, cta] = STOP[kind];
+  if (recordingView) {
+    $("[data-stop-label]").textContent = "Private recording";
+    $("[data-stop-title]").textContent = kind === "ended" ? "This recording session has ended." : "The demo server could not start.";
+    $("[data-stop-lead]").textContent = kind === "unavailable" ? "Check the local demo connection and reload." : "Check the reservation in the recording backend.";
+    $("[data-stop-actions]").replaceChildren();
+    show("stop");
+    return;
+  }
   $("[data-stop-label]").textContent = label;
   $("[data-stop-title]").textContent = title;
   $("[data-stop-lead]").textContent = lead;
@@ -212,6 +255,7 @@ function stop(kind) {
 const msgsEl = $("[data-msgs]"), emptyEl = $("[data-empty]"), composer = $("[data-composer]"), promptEl = $("[data-prompt]");
 const sendBtn = $("[data-send]"), stopBtn = $("[data-stop]"), newBtn = $("[data-new]"), thinkEl = $("[data-think]");
 const docEl = $("[data-doc]"), docError = $("[data-doc-error]"), attachEl = $("[data-attach]"), noticeEl = $("[data-notice]");
+const pickEl = $("[data-pick]"), pickInputs = [...pickEl.querySelectorAll("input")];
 
 // the conversation, in memory only: { role, content (what the model gets), text (what the visitor typed), doc, reasoning, timings, end, el }
 const chat = { started: false, msgs: [], busy: null, doc: null, over: false, md: null };
@@ -219,11 +263,44 @@ let leftTimer = 0;
 
 async function ready(st) {
   if (!chat.md) chat.md = await loadMarkdown();
-  $("[data-model]").textContent = st.model || "Live model";
+  const tiers = showPicker(st.models);
+  $("[data-model]").textContent = tiers.length > 1 ? tiers.map((m) => m.label).join(" + ") : st.model || "Live model";
   $("[data-hardware]").textContent = hardwareLine(st.hardware);
   startCountdown(st.ends_at);
+  if (recordingView) {
+    $("[data-machine-label]").textContent = st.recording === "preview" ? "Preview" : "Live";
+    $("[data-report-example]").hidden = true;
+    $("[data-attach-panel]").hidden = true;
+    $("[data-invoice-example]").hidden = false;
+    $("[data-invoice-text]").textContent = invoiceText;
+    $("[data-example=invoice]").hidden = recordingView === "tiered" || st.invoice_review;
+    $("[data-example=records]").hidden = tiers.length < 2 || st.invoice_review;
+    $("[data-example=fast-review]").hidden = !st.invoice_review;
+    $("[data-example=deep-review]").hidden = !st.invoice_review || !tiers.some(({ id }) => id === "deep");
+    $("[data-empty] p").textContent = "Start with the sample invoice.";
+    const next = $("[data-recording-next]");
+    next.hidden = st.recording !== "preview" || tiers.length > 1;
+    next.href = "/demo?recording=tiered";
+    next.textContent = "Try the two-model server";
+  }
   if (!chat.started) { chat.started = true; show("chat"); }
 }
+
+// a tiered box offers Auto / Deep / Fast; a single-model box shows no picker and sends no model
+function showPicker(models) {
+  const ids = new Set(Array.isArray(models) ? models.map((m) => m?.id) : []);
+  for (const input of pickInputs) input.closest("label").hidden = !ids.has(input.value);
+  const offered = pickInputs.filter((i) => ids.has(i.value));
+  pickEl.hidden = offered.length < 2;
+  if (!pickEl.hidden && !offered.some((i) => i.checked)) {
+    const preferred = offered.find((i) => i.value === models[0]?.id);
+    (preferred ?? offered[0]).checked = true;
+  }
+  // the models behind the choice, for the header: every one except "auto"
+  return pickEl.hidden ? [] : models.filter((m) => m.id !== "auto" && offered.some((i) => i.value === m.id));
+}
+
+const pickedModel = () => (pickEl.hidden ? undefined : pickInputs.find((i) => i.checked && !i.closest("label").hidden)?.value);
 
 function hardwareLine(h) {
   if (!h) return "";
@@ -257,6 +334,7 @@ function chatOver(s) {
     ? "Your two hours are up, and the server has been shut down. Your conversation stays on this page until you close it. "
     : "The server stopped answering and has been shut down. Your conversation stays on this page until you close it. ")
     + (CONTACT ? `<a class="link" href="mailto:${esc(CONTACT)}">Talk to us</a>` : `<a class="link" href="/check">Get in touch</a>`);
+  if (recordingView) noticeEl.textContent = "This recording session has ended. Your conversation stays on this page.";
   noticeEl.hidden = false;
   composer.classList.add("is-off");
   for (const el of composer.querySelectorAll("textarea, button, input")) el.disabled = true;
@@ -327,12 +405,14 @@ function drawAnswer(m) {
   if (m.end === "error") parts.push(`<span class="msg__err">${esc(m.error)}</span>`);
   if (m.end === "stopped") parts.push("<span>Stopped</span>");
   const t = m.timings;
+  if (m.by) parts.push('<span data-by></span>');
   if (t?.predicted_per_second) {
     const detail = [t.predicted_n && `${t.predicted_n.toLocaleString("en-US")} tokens written`, t.prompt_n && t.prompt_per_second && `${t.prompt_n.toLocaleString("en-US")} read at ${Math.round(t.prompt_per_second).toLocaleString("en-US")}/s`].filter(Boolean).join(" · ");
     parts.push(`<span class="msg__speed">${Math.round(t.predicted_per_second)} tokens/s</span>${detail ? `<span>${esc(detail)}</span>` : ""}`);
   }
   if (m.end && m === chat.msgs.at(-1) && !chat.over) parts.push(`<button class="ghost ghost--sm" type="button" data-regen>${m.end === "error" ? "Try again" : "Regenerate"}</button>`);
   meta.innerHTML = parts.join("");
+  if (m.by) $("[data-by]", meta).textContent = `by ${m.by}`; // the model's name comes from the stream: text only
   meta.hidden = !parts.length;
 }
 
@@ -347,6 +427,7 @@ function syncButtons() {
   stopBtn.hidden = !busy;
   newBtn.hidden = busy || !chat.msgs.length || chat.over;
   for (const b of document.querySelectorAll("[data-example], [data-regen]")) b.disabled = busy || chat.over;
+  for (const i of pickInputs) i.disabled = busy || chat.over;
 }
 
 // ── sending ──
@@ -356,9 +437,9 @@ function compose(text, doc) {
   return `Here is a document, ${doc.name}:\n\n<document>\n${doc.text}\n</document>\n\n${text}`;
 }
 
-async function send(text, doc) {
+async function send(text, doc, invoiceReview = false) {
   if (chat.busy || chat.over) return;
-  const user = { role: "user", text, doc, content: compose(text, doc) };
+  const user = { role: "user", text, doc, invoiceReview, content: compose(text, doc) };
   chat.msgs.push(user);
   addMessage(user);
   await answer();
@@ -368,8 +449,14 @@ async function answer() {
   // the answer before this one loses its "Regenerate" button: only the newest can be redone
   const prev = chat.msgs.at(-2);
   if (prev?.role === "assistant") drawAnswer(prev);
-  const m = { role: "assistant", content: "", reasoning: "", started: Date.now() };
+  // with a picker, the stream names the model that answered (Auto may choose either)
+  const m = { role: "assistant", content: "", reasoning: "", started: Date.now(), named: !pickEl.hidden };
   const history = chat.msgs.filter((x) => x.role === "user" || x.end !== "error").map(({ role, content }) => ({ role, content }));
+  const invoiceReview = chat.msgs.findLast(({ role }) => role === "user")?.invoiceReview;
+  if (invoiceReview) {
+    const model = invoiceReview === "resolution" ? "deep" : "fast";
+    pickInputs.find((input) => input.value === model).checked = true;
+  }
   chat.msgs.push(m);
   addMessage(m);
   pinned = true;
@@ -382,15 +469,16 @@ async function answer() {
     const res = await fetch("/api/demo/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: history, thinking: thinkEl.checked }),
+      body: JSON.stringify({ messages: history, thinking: thinkEl.checked, model: pickedModel(), ...(invoiceReview ? { invoice_review: invoiceReview } : {}) }),
       signal: ctrl.signal,
     });
     if (!res.ok || !res.body) {
       const data = await res.json().catch(() => ({}));
-      throw Object.assign(new Error(chatError(res.status, data.error)), { status: res.status });
+      throw Object.assign(new Error(invoiceReview && data.error ? data.error : chatError(res.status, data.error)), { status: res.status });
     }
     for await (const chunk of events(res.body)) {
       if (chunk.error) throw new Error(chunk.error.message || "The model stopped with an error.");
+      if (invoiceReview && chunk.invoice_sources) showInvoiceSources(chunk.invoice_sources);
       const delta = chunk.choices?.[0]?.delta ?? {};
       if (delta.reasoning_content) m.reasoning += delta.reasoning_content;
       if (delta.content) {
@@ -405,6 +493,7 @@ async function answer() {
         m.content += c;
       }
       if (chunk.timings) m.timings = chunk.timings;
+      if (m.named && typeof chunk.model === "string" && chunk.model) m.by = chunk.model.slice(0, 80);
       paint(m);
     }
     m.end = "done";
@@ -425,7 +514,7 @@ async function answer() {
 }
 
 function chatError(code, text) {
-  if (code === 401) return "Your session has expired. Open the link from your email again.";
+  if (code === 401) return recordingView ? "Your recording session has expired." : "Your session has expired. Open the link from your email again.";
   if (code === 409) return text || "The server is not available for chat right now.";
   if (code === 413) return "That is too long for the demo. Try a shorter document, or start a new chat.";
   if (code === 502) return "The server is not answering right now. Please try again in a moment.";
@@ -485,6 +574,7 @@ newBtn.addEventListener("click", () => {
   if (chat.busy) return;
   for (const m of chat.msgs) m.el.remove();
   chat.msgs = [];
+  $("[data-purchasing-records]").hidden = true;
   emptyEl.hidden = false;
   syncButtons();
   promptEl.focus();
@@ -492,10 +582,31 @@ newBtn.addEventListener("click", () => {
 
 // ── the example report and the visitor's own documents ──
 
+function showInvoiceSources(sources) {
+  const panel = $("[data-purchasing-records]");
+  for (const row of panel.querySelectorAll("[data-purchasing-record]")) {
+    const record = sources[row.dataset.purchasingRecord];
+    if (!record) return;
+    $("strong", row).textContent = record.id;
+    $("dd", row).textContent = `${record.units} units · ${usd(record.unit_price_usd)} each`;
+  }
+  panel.hidden = false;
+}
+
 let sampleText = null;
-document.querySelector("[data-examples]").addEventListener("click", async (ev) => {
+document.querySelector(".chat__side").addEventListener("click", async (ev) => {
   const b = ev.target.closest("[data-example]");
   if (!b || chat.busy || chat.over) return;
+  if (b.dataset.example === "fast-review" || b.dataset.example === "deep-review") {
+    if (!status?.invoice_review) return;
+    const doc = { name: "INV-1042.txt", text: invoiceText, chars: invoiceText.length };
+    const deep = b.dataset.example === "deep-review";
+    return send(deep ? REVIEW_BEFORE_PAYMENT : MATCH_INVOICE, doc, deep ? "resolution" : true);
+  }
+  if (b.dataset.example === "invoice" || b.dataset.example === "records") {
+    const doc = { name: "INV-1042.txt", text: invoiceText, chars: invoiceText.length };
+    return send(b.dataset.example === "invoice" ? EXTRACT_INVOICE : CHECK_RECORDS, doc);
+  }
   try {
     sampleText ??= await fetch(SAMPLE.url).then((r) => { if (!r.ok) throw new Error(r.status); return r.text(); });
   } catch {
@@ -565,7 +676,7 @@ async function pdfText(file) {
 }
 
 // ── a switch through every status, only on the local dev server (see vite.config.js) ──
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && !recordingView) {
   const states = ["none", "checking", "review", "queued", "booting", "ready", "rejected", "failed", "ended", "unreachable"];
   const now = new URLSearchParams(location.search).get("demo");
   const bar = document.createElement("nav");
@@ -575,4 +686,5 @@ if (import.meta.env.DEV) {
   document.body.append(bar);
 }
 
+if (recordingView === "1") bindRecording(refresh);
 refresh();

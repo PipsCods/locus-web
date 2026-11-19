@@ -5,14 +5,25 @@ search, the benchmark, and the demo start script.
 
 | File | Runs where | What |
 |---|---|---|
-| `Dockerfile` | build machine | CUDA 13.0 image with ik_llama.cpp and mainline llama.cpp (sm_120), cloudflared, `hf`, `vastai` |
+| `Dockerfile` | build machine | CUDA 13.0 image with ik_llama.cpp and mainline llama.cpp (sm_86 and sm_120), cloudflared, `hf`, `vastai`, `router.py` |
 | `find-offer.sh` | your laptop | ranks single-GPU offers (RTX 5090 by default), `--create` rents an offer |
 | `bench.sh` | rented machine | download + load timing, `-ncmoe`/threads sweep, prefill/generation speed, quality spot check |
 | `bench-3090.sh` | rented machine | full EPYC/3090 repeat with hardware checks, host and GPU telemetry, and a rental deadline |
 | `bench-concurrency.sh` | rented machine | closed-loop chat and document workloads at 1, 2, 4 and 8 simultaneous users |
 | `onstart.sh` | rented machine | demo start: self-destruct timer, tunnel, download, server |
+| `router.py` | rented machine | tiered mode only: routes each chat request to the `deep` or `fast` server (difficulty, context fit, queue depth); stdlib Python |
 | `llama-wrapper.sh` | rented machine | `llama-server-ik`, `llama-server-mainline` (and `llama-bench-*`) |
 | `prompts/` | rented machine | spot-check prompts and the synthetic report they use |
+
+## Checks
+
+No CI; run these before committing here:
+
+```sh
+cd demo/instance
+for f in *.sh; do bash -n "$f"; done   # and shellcheck *.sh if you have it
+python3 -m unittest -v test_router     # router.py against fake llama-servers, ~15 s
+```
 
 ## Build and push the image
 
@@ -28,7 +39,7 @@ docker push ghcr.io/<you>/locus-instance:2026-11-16
 
 Build args: `IK_REF`, `MAINLINE_REF` (commit or tag), `CUDA_VERSION`
 (default 13.0.3, the lowest CUDA that 5090 hosts on Vast report),
-`CUDA_ARCHITECTURES` (120), `IK_CPU_VARIANTS` ("v3 zen4"),
+`CUDA_ARCHITECTURES` ("86;120": RTX 3090 and 5090; one arch builds faster), `IK_CPU_VARIANTS` ("v3 zen4"),
 `CLOUDFLARED_VERSION`/`CLOUDFLARED_SHA256`, `HF_HUB_VERSION`, `VASTAI_VERSION`,
 `BUILD_JOBS`. A private registry works; pass `--login '-u USER -p TOKEN ghcr.io'`
 to `find-offer.sh`.
@@ -163,14 +174,46 @@ nohup /opt/locus/onstart.sh >>/var/log/locus-onstart.log 2>&1 &
 | `LLAMA_API_KEY` | yes | bearer key; written to a 0600 file and passed with `--api-key-file` |
 | `CF_TUNNEL_TOKEN` | yes | remotely-managed tunnel token; ingress must point at `http://localhost:8080` |
 | `DEMO_TTL_SECONDS` | yes | hard lifetime from container start; then the instance destroys itself |
+| `DEMO_EXPIRES_AT` | no | absolute Unix timestamp in seconds. If earlier than the container’s own deadline, the instance destroys itself at this timestamp |
 | `CONTAINER_ID`, `CONTAINER_API_KEY` | injected by Vast | used by the self-destruct timer |
 | `HF_TOKEN`, `MODELS_DIR`, `STARTUP_TIMEOUT`, `DESTROY_ON_FAILURE` | no | see the header of `onstart.sh` |
+
+**Tiered mode** (two models behind `router.py`, e.g. on 2x RTX 3090): set
+`SERVERS` and the per-server variables below instead of `MODEL_REPO`,
+`MODEL_FILES`, `RUNTIME` and `LLAMA_ARGS`. With `SERVERS` unset the machine
+runs one server exactly as above. All values are flat strings without quotes,
+because the Worker's env string cannot carry them.
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `SERVERS` | yes | server names, e.g. `DEEP FAST`. The tier id is the lower-cased name and must be `deep` or `fast`. Server k (from 1) listens on `127.0.0.1:808k`; the router takes 8080 |
+| `<N>_REPO`, `<N>_FILES`, `<N>_RUNTIME` | yes | as `MODEL_REPO`, `MODEL_FILES`, `RUNTIME`, per server. Files land in `MODELS_DIR/<owner>--<repo>/`, one `hf download` per repo |
+| `<N>_CTX` | yes | context per slot; the server gets `-np <N>_SLOTS -c <N>_SLOTS*<N>_CTX`, and the router uses it for the context-fit rule |
+| `<N>_SLOTS` | no | parallel slots (default 1) |
+| `<N>_ARGS` | no | as `LLAMA_ARGS`, appended last |
+| `<N>_GPUS` | no | `CUDA_VISIBLE_DEVICES` for this server, e.g. `0`, or `1,0` with `-ts` to spill layers onto GPU 0. Indices follow `nvidia-smi` (`CUDA_DEVICE_ORDER=PCI_BUS_ID` is always set) |
+| `<N>_CPUS` | no | `taskset -c` core list, e.g. `0-27` |
+| `<N>_ALIAS` | no | `--alias`: the model name in the streamed chunks, e.g. `Qwen3.8-Flash-Next` (also given to the router, which enforces it: ik ignores the flag) |
+| `ROUTER_POLICY` | no | default `difficulty+spill` (see [Router](#router-tiered-mode)) |
+| `ROUTER_DEFAULT` | no | tier for requests without `model`, default `deep` |
+| `ROUTER_JUDGE` | no | `none` (default) or `fast` |
+
+Example: `SERVERS="DEEP FAST"`, `DEEP_REPO=unsloth/Qwen3.8-Flash-Next-GGUF`,
+`DEEP_RUNTIME=ik`, `DEEP_GPUS=0`, `DEEP_SLOTS=4`, `DEEP_CTX=32768`,
+`DEEP_ARGS="-ncmoe 20 -t 28"`, `DEEP_ALIAS=Qwen3.8-Flash-Next`;
+`FAST_REPO=unsloth/Qwen3.8-27B-GGUF`, `FAST_RUNTIME=mainline`,
+`FAST_GPUS=1,0`, `FAST_SLOTS=8`, `FAST_CTX=16384`,
+`FAST_ARGS="-ts 1,0 --kv-unified -fa on -ctk q8_0 -ctv q8_0 -t 4"`,
+`FAST_ALIAS=Qwen3.8-27B` (the `-ncmoe`, thread and file values come from the
+benchmark; check the repo file names on Hugging Face before use).
 
 Server defaults: `127.0.0.1:8080 -ngl 999 -np 1 --jinja`, plus `--defer-ple`
 for ik (and `GGML_CUDA_NO_PINNED=1` from the wrapper) or
 `--fit off` for mainline: the same base as `bench.sh`, so a
 benchmarked config is reproduced by putting its `-ncmoe`/`-t`/`-c` in
-`LLAMA_ARGS`. `/health` needs no key on either runtime; everything else does.
+`LLAMA_ARGS`. In tiered mode each server also gets `--metrics`, `--alias`
+and the `-np`/`-c` above. `/health` needs no key on either runtime (nor on
+the router); everything else does.
 
 Behaviour: the self-destruct timer starts first and runs in its own session,
 so it fires even if the download hangs or the script dies. The deadline is
@@ -181,11 +224,49 @@ deadline it stops the server and calls
 0), with the REST `DELETE` as fallback, retrying every 30 s. The script exits
 non-zero if the download fails 3 times, if the server does not answer
 `/health` within `STARTUP_TIMEOUT`, or if it fails to come back 5 times in a
-row after crashes; it then also stops the tunnel. State for debugging over
-ssh: `/var/lib/locus/{status,download.log,server.log,cloudflared.log,self-destruct.log}`.
+row after crashes; it then also stops the tunnel. In tiered mode this holds
+per server and for the router: each is restarted on its own, and `status` is
+`ready` only when all servers and the router are healthy. State for
+debugging over ssh: `/var/lib/locus/{status,download.log,server.log,cloudflared.log,self-destruct.log}`
+(tiered: `server-deep.log`, `server-fast.log`, `router.log`, `router.jsonl`).
 
 Thinking control for clients: the chat template turns thinking off only with
 `chat_template_kwargs: {"enable_thinking": false}`; effort levels are
 `reasoning_effort` `low`, `medium`, `xhigh` (default). There is no `none`
 level in the template (it raises an error); mainline also maps the OpenAI
 field `reasoning_effort: "none"` to thinking off, ik does not.
+
+## Router (tiered mode)
+
+`router.py` sits on `127.0.0.1:8080` in front of two llama-servers and
+streams their answers through unchanged:
+
+```sh
+python3 router.py --port 8080 --key-file /run/locus/api-key \
+  --backend deep=8081:4:32768 --backend fast=8082:8:16384 \
+  --policy difficulty+spill --default deep [--judge none|fast] [--log FILE]
+```
+
+`--backend` is `NAME=PORT:SLOTS:CTX_PER_SLOT`; names are `deep` and `fast`.
+`--alias NAME=MODEL_NAME` (repeatable; `onstart.sh` passes `<N>_ALIAS`)
+rewrites the top-level `model` of that tier's answers, streamed or not:
+ik_llama.cpp ignores llama-server's `--alias` and sends the GGUF file name.
+The request's `model` picks the tier: `deep`, `fast`, or `auto` (absent means
+`--default`). For `auto`, unhealthy tiers and tiers whose per-slot context
+cannot hold the prompt (chars / 3.5) plus `max_tokens` are dropped first, then
+the policy decides: `deep-only`, `fast-only`, `random:P` (deep with
+probability P), `difficulty` (heuristic score >= `THRESHOLD` goes deep) or
+`difficulty+spill` (also moves a request off a tier with no free slot when the
+other has room, unless the score is very high). Benchmarks override per
+request with `"router_policy"` and `"router_judge"` in the body; the router
+removes `model` and both of these before forwarding. `--judge fast` adds a
+one-token easy/hard verdict from the fast tier (2 s timeout, falls back to the
+heuristic). Weights and thresholds are constants at the top of the file.
+
+An explicit `deep`/`fast` request to an unhealthy tier gets 503; `auto` uses
+the other tier. Responses carry `x-locus-tier`, `x-locus-score` and
+`x-locus-reason`. `GET /health` needs no key and is 200 only when both
+backends are; `GET /router/stats` (key) gives per-tier in-flight, slots,
+routed and error counts, spills and judge timing. With `--log`, one JSON line
+per request: tier, score, reason, features, in-flight counts, TTFT, latency,
+status.

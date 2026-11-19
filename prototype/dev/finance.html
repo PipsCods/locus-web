@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invoice Review · Local preview</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/src/style.css">
+  <link rel="stylesheet" href="/src/check.css">
+  <link rel="stylesheet" href="/dev/finance.css">
+</head>
+<body class="finance">
+  <header class="finance__top">
+    <div class="wrap">
+      <a class="link" href="/demo?recording=tiered">← Back to locus</a>
+      <span class="label">Local preview · sample data</span>
+    </div>
+  </header>
+  <main class="wrap finance__main">
+    <header class="finance__title">
+      <h1>Invoice Review</h1>
+      <p>Fast · Qwen3.8-27B</p>
+    </header>
+
+    <div class="finance__layout">
+      <section class="finance__panel" aria-labelledby="finance-check">
+        <h2 id="finance-check">Check the invoice</h2>
+        <form data-review-form>
+          <label class="sr" for="finance-prompt">Question</label>
+          <textarea id="finance-prompt" name="prompt" required rows="2"></textarea>
+          <button class="btn" type="submit">Ask assistant</button>
+        </form>
+        <p class="finance__error" role="alert" data-review-error hidden></p>
+        <p role="status" class="finance__lookup" data-review-status></p>
+        <div class="finance__result" data-review-result hidden>
+          <h3 data-review-amount></h3>
+          <p data-review-summary></p>
+        </div>
+      </section>
+
+      <aside class="finance__records" aria-label="Documents">
+        <section class="finance__panel">
+          <p class="label">Supplier invoice</p>
+          <h2 data-invoice-id></h2>
+          <pre data-finance-invoice></pre>
+        </section>
+        <details class="finance__panel finance__source" data-review-source hidden>
+          <summary>View purchase order and goods receipt</summary>
+          <p class="finance__lookup">Retrieved with <code>get_purchase_order</code></p>
+          <dl data-source-rows></dl>
+        </details>
+      </aside>
+    </div>
+  </main>
+  <script type="module" src="/dev/finance.js"></script>
+</body>
+</html>

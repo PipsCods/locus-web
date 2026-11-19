@@ -21,10 +21,19 @@ cron */5: sweep Vast instances, tunnels and DNS records named locus-demo-*; admi
 |---|---|
 | `POST /api/demo/request` | `{email, company_website (honeypot), turnstile_token, page}` → `200 {ok:true}` / `400 {ok:false,error}` (also `403` cross-site, `413`, `503` if Turnstile or email is down). Free and disposable mailboxes are refused here already. |
 | `GET /api/demo/confirm?token=…` | Single-use confirmation link (24 h): marks the email confirmed, sets the `locus_demo` cookie (HttpOnly, Secure, SameSite=Lax), starts the checks, redirects to `/demo`. A used or bad link redirects to `/demo?link=used` / `/demo?link=invalid`. The same route accepts the "ready" email's access link, which may be used repeatedly until the window ends (for opening the demo on another device). |
-| `GET /api/demo/status` | `{ok, status, step?, eta_minutes?, ends_at?, hardware?: {cpu, ram_gb, gpu}, model?}`; no cookie → `none`. |
-| `POST /api/demo/chat` | `{messages, thinking}` → llama-server SSE passed through unchanged. Adds the machine's API key, sets `chat_template_kwargs.enable_thinking` from `thinking`, caps `max_tokens` (`CHAT_MAX_TOKENS`) and body size (`CHAT_MAX_BODY_BYTES`). Errors `401`, `409`, `413`, `502`, `400`. |
+| `GET /api/demo/status` | `{ok, status, step?, eta_minutes?, ends_at?, hardware?: {cpu, ram_gb, gpu}, model?, models?: [{id, label}], invoice_review?}`. With no cookie, status is `none`. Ready status includes `models` when `CHAT_MODELS` is set and `invoice_review: true` when the local manual MCP integration is enabled. |
+| `POST /api/demo/chat` | `{messages, thinking, model?, invoice_review?}` → llama-server SSE. Adds the machine's API key, sets `chat_template_kwargs.enable_thinking` from `thinking`, caps `max_tokens` (`CHAT_MAX_TOKENS`) and body size (`CHAT_MAX_BODY_BYTES`). With `CHAT_MODELS` set, the optional `model` must be one of its ids. Otherwise the machine uses its default. In local manual sessions, `invoice_review: true` checks the sample invoice on `fast` and `invoice_review: "resolution"` reviews the invoice before payment on `deep` when available. Both send an `invoice_sources` event before the completion stream. Errors `400`, `401`, `403`, `409`, `413`, `502`. |
 | `GET /api/demo/decide?token=…&action=approve\|reject` | Owner's one-click links from the review email (single use, 3 days). Approving still goes through the caps. |
 | `GET /api/demo/manual?key=…` | Phase 2 manual mode, see below. |
+
+The [recording workflow](../recording/README.md#local-booking-path) is available in
+loopback-only Wrangler when `RECORDING_TAKE_ID` is set.
+
+| Route | What it does |
+|---|---|
+| `GET /api/demo/recording/catalog` | Lists the server profiles and total user ranges. |
+| `POST /api/demo/recording/recommendation` | Takes `{profile, users, key}` and returns the recommendation and preflight availability. The `users` value is the option ID from the catalog. |
+| `POST /api/demo/recording/start` | Takes the same body, checks availability again, and starts or resumes the armed take. Sets the normal session cookie for `status` and `chat`. |
 
 ## Safety rules (enforced in code)
 
@@ -97,6 +106,7 @@ export const onRequest = ({ request, env }) => env.DEMO.fetch(request);
 | `CF_API_TOKEN` | per-demo tunnels and DNS records |
 | `MANUAL_UPSTREAM_KEY` | manual mode only: the hand-started llama-server's `--api-key` |
 | `MANUAL_ACCESS_KEY` | manual mode only: ≥ 16 characters, the secret in the access link |
+| `MANUAL_INVOICE_MCP_URL` | optional loopback HTTP URL for the read-only purchasing fixture in local manual mode |
 
 ### Vars (`wrangler.jsonc`)
 
@@ -115,13 +125,17 @@ export const onRequest = ({ request, env }) => env.DEMO.fetch(request);
 | `VAST_DISK_GB` | 250 | |
 | `VAST_RUNTYPE` | `args` | keeps the image's own entrypoint (the start script) |
 | `VAST_GPU_NAME` | `RTX 5090` | offer filter |
+| `VAST_NUM_GPUS` | 1 | offer filter: GPUs per machine (2 for a tiered box). RAM tiers then apply to the whole slice |
 | `VAST_RAM_TIERS_GB` | `192,128` | tried in order |
 | `VAST_MIN_RELIABILITY`, `VAST_MIN_INET_DOWN`, `VAST_MAX_DPH` | 0.99, 1000, 3 | offer filters |
 | `VAST_PREFER_CPU` | `EPYC,Xeon` | preferred within a tier (not a server-side filter) |
 | `MODEL_REPO`, `MODEL_FILES`, `RUNTIME`, `LLAMA_ARGS` | | passed to the start script; set after the benchmark |
 | `MODEL_LABEL` | `Qwen3.8-Flash-Next` | shown on the status page |
+| `SERVERS` | | tiered box: e.g. `DEEP FAST`. When set, the machine gets `SERVERS`, each set `<N>_REPO`, `<N>_FILES`, `<N>_RUNTIME`, `<N>_ARGS`, `<N>_GPUS`, `<N>_CPUS`, `<N>_ALIAS`, `<N>_SLOTS`, `<N>_CTX` var (add them to `vars` as needed; no quotes) and the `ROUTER_*` vars, instead of `MODEL_REPO`…`LLAMA_ARGS`. Meanings in [`demo/instance/README.md`](../instance/README.md#demo-machine-env-contract) |
+| `ROUTER_POLICY`, `ROUTER_DEFAULT`, `ROUTER_JUDGE` | | tiered box only; empty = the machine's defaults (`difficulty+spill`, `deep`, `none`) |
 | `CF_ACCOUNT_ID`, `CF_ZONE_ID`, `DEMO_DOMAIN` | | where tunnels and their CNAMEs live. Keep `DEMO_DOMAIN` the zone apex (`locus-ai.tech`): Cloudflare's free certificate covers one level of subdomain, so `locus-demo-<id>.demo.locus-ai.tech` would have no valid HTTPS certificate |
 | `CHAT_MAX_BODY_BYTES`, `CHAT_MAX_TOKENS`, `CHAT_THINKING_KWARG` | 400000, 4096, `enable_thinking` | chat proxy |
+| `CHAT_MODELS` | (empty) | tiered box only: `id:label,…`, e.g. `auto:Auto,deep:Qwen3.8-Flash-Next,fast:Qwen3.8-27B`. Lists the models the page offers and the ids `chat` accepts. Empty: one model, no picker |
 | `MANUAL_*` | | manual mode, below |
 
 Less common knobs (`CHECK_TIMEOUT_MS`, `AGENT_TIMEOUT_MS`, `AGENT_MAX_OUTPUT_TOKENS`,

@@ -17,7 +17,27 @@
 #                     ingress points at http://localhost:8080
 #   DEMO_TTL_SECONDS  hard lifetime, counted from container start; then the
 #                     instance destroys itself
+#   DEMO_EXPIRES_AT   optional absolute Unix deadline, also enforced in the Worker
 #   CONTAINER_ID, CONTAINER_API_KEY   injected by Vast; used for self-destruct
+#
+# Tiered mode (several model servers behind router.py) replaces the four
+# MODEL_*/RUNTIME/LLAMA_ARGS variables. Flat variables only, because the
+# Worker's env string cannot carry quotes:
+#   SERVERS           e.g. "DEEP FAST"; the tier id is the lower-cased name
+#                     (deep | fast). Server k listens on 127.0.0.1:808<k>
+#                     (8081, 8082, ...), router.py on 8080.
+#   <N>_REPO, <N>_FILES, <N>_RUNTIME, <N>_ARGS   as MODEL_REPO etc. above
+#   <N>_CTX           context per slot (required); the server gets
+#                     -np <N>_SLOTS -c <N>_SLOTS*<N>_CTX
+#   <N>_SLOTS         parallel slots (default 1)
+#   <N>_GPUS          CUDA_VISIBLE_DEVICES for this server, e.g. 0 or 1,0
+#   <N>_CPUS          optional taskset core list, e.g. 0-27
+#   <N>_ALIAS         model name in the streamed chunks (--alias)
+#   ROUTER_POLICY     default difficulty+spill (see router.py)
+#   ROUTER_DEFAULT    tier for requests without "model", default deep
+#   ROUTER_JUDGE      none | fast, default none
+# Each backend also gets --metrics. Status is "ready" only when every server
+# and the router are healthy; each is restarted on its own after a crash.
 # Optional:
 #   HF_TOKEN, MODELS_DIR (default /workspace/models),
 #   STARTUP_TIMEOUT (s to reach /health after download, default 1800),
@@ -25,9 +45,10 @@
 #   instead of waiting for the TTL or the orchestrator),
 #   For local testing: LOCUS_ALLOW_NO_SELF_DESTRUCT=1 (no Vast variables),
 #   LOCUS_CONTAINER_START (epoch to count the TTL from), LOCUS_STATE_DIR,
-#   LOCUS_RUN_DIR. Logs and status go to $LOCUS_STATE_DIR (/var/lib/locus).
+#   LOCUS_RUN_DIR, LOCUS_PORT (instead of 8080; backends follow it).
+#   Logs and status go to $LOCUS_STATE_DIR (/var/lib/locus).
 #
-# Server defaults: 127.0.0.1:8080, -ngl 999 -np 1 --jinja, plus
+# Server defaults: 127.0.0.1:8080, -ngl 999 -np 1 --jinja (tiered: see above), plus
 #   ik:       --defer-ple (GGML_CUDA_NO_PINNED=1 via the wrapper)
 #   mainline: --fit off
 # matching bench.sh, so a benchmarked config is reproduced by LLAMA_ARGS.
@@ -43,9 +64,12 @@ STATE_DIR=${LOCUS_STATE_DIR:-/var/lib/locus}
 RUN_DIR=${LOCUS_RUN_DIR:-/run/locus}
 MODELS_DIR=${MODELS_DIR:-/workspace/models}
 STARTUP_TIMEOUT=${STARTUP_TIMEOUT:-1800}
-PORT=8080
-MAX_RESTARTS=5          # consecutive failed restarts before giving up
+PORT=${LOCUS_PORT:-8080}
+MAX_RESTARTS=5          # consecutive failed restarts before giving up (per server)
 SELF=$(readlink -f "${BASH_SOURCE[0]}")
+LOCUS_DIR=$(dirname "$SELF")
+# GPU indices as nvidia-smi shows them (CUDA's default order is fastest first).
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
 
 log() { printf '[%s] onstart: %s\n' "$(date -u +%FT%TZ)" "$*" >&2; }
 status() { echo "$1" >"$STATE_DIR/status"; log "status: $1"; }
@@ -60,7 +84,7 @@ destroy_now() {
   # Tell the supervisor not to restart anything, then stop serving now even
   # if the destroy call itself is slow or failing.
   touch "$STATE_DIR/expired"
-  pkill -f 'llama-server' 2>/dev/null || true
+  pkill -f 'llama-server|locus/router\.py' 2>/dev/null || true
   while true; do
     # -y is required: without it vastai asks for confirmation, reads EOF in a
     # non-interactive shell, prints "Aborted." and exits 0 without destroying.
@@ -114,6 +138,10 @@ arm_self_destruct() {
     deadline=$(cat "$STATE_DIR/deadline")   # never extended by a re-run
   else
     deadline=$(( $(container_start) + DEMO_TTL_SECONDS ))
+    if [[ -n "${DEMO_EXPIRES_AT:-}" ]]; then
+      [[ "$DEMO_EXPIRES_AT" =~ ^[1-9][0-9]{0,11}$ ]] || { status "failed: DEMO_EXPIRES_AT must be a Unix timestamp"; exit 1; }
+      if (( DEMO_EXPIRES_AT < deadline )); then deadline=$DEMO_EXPIRES_AT; fi
+    fi
     echo "$deadline" >"$STATE_DIR/deadline"
   fi
   if [[ -s "$RUN_DIR/self-destruct.pid" ]] && pid=$(cat "$RUN_DIR/self-destruct.pid") && kill -0 "$pid" 2>/dev/null; then
@@ -137,6 +165,7 @@ fail() {
   exit 1
 }
 
+
 # ---------------------------------------------------------------------------
 # Checks
 # ---------------------------------------------------------------------------
@@ -144,8 +173,24 @@ fail() {
 mkdir -p "$STATE_DIR" "$RUN_DIR"
 chmod 700 "$RUN_DIR"
 
+# One entry per model server. Single mode: one unnamed server from
+# MODEL_REPO/MODEL_FILES/RUNTIME/LLAMA_ARGS on $PORT. Tiered mode: one per
+# name in SERVERS on $PORT+1, +2, ..., with router.py on $PORT.
+read -r -a names <<<"${SERVERS:-}"
+TIERED=0
+(( ${#names[@]} == 0 )) || TIERED=1
+
 missing=()
-for v in MODEL_REPO MODEL_FILES RUNTIME LLAMA_API_KEY CF_TUNNEL_TOKEN DEMO_TTL_SECONDS; do
+if (( TIERED )); then
+  required=(LLAMA_API_KEY CF_TUNNEL_TOKEN DEMO_TTL_SECONDS)
+  for n in "${names[@]}"; do
+    [[ "$n" =~ ^[A-Z][A-Z0-9]*$ ]] || { status "failed: SERVERS names must be upper-case letters/digits, got '$n'"; exit 1; }
+    required+=("${n}_REPO" "${n}_FILES" "${n}_RUNTIME" "${n}_CTX")
+  done
+else
+  required=(MODEL_REPO MODEL_FILES RUNTIME LLAMA_API_KEY CF_TUNNEL_TOKEN DEMO_TTL_SECONDS)
+fi
+for v in "${required[@]}"; do
   [[ -n "${!v:-}" ]] || missing+=("$v")
 done
 if [[ "${LOCUS_ALLOW_NO_SELF_DESTRUCT:-0}" != 1 ]]; then
@@ -155,11 +200,52 @@ if [[ "${LOCUS_ALLOW_NO_SELF_DESTRUCT:-0}" != 1 ]]; then
 fi
 (( ${#missing[@]} == 0 )) || { status "failed: missing env ${missing[*]}"; exit 1; }
 [[ "$DEMO_TTL_SECONDS" =~ ^[0-9]+$ && "$DEMO_TTL_SECONDS" -gt 0 ]] || { status "failed: DEMO_TTL_SECONDS must be a positive integer"; exit 1; }
-case "$RUNTIME" in
-  ik|mainline) ;;
-  *) status "failed: RUNTIME must be ik or mainline, got '$RUNTIME'"; exit 1 ;;
-esac
-command -v "llama-server-$RUNTIME" >/dev/null || { status "failed: llama-server-$RUNTIME not found"; exit 1; }
+
+# Per server s (index into the arrays below; single mode has s=0 only):
+srv_name=() srv_repo=() srv_files=() srv_runtime=() srv_args=() srv_gpus=() srv_cpus=() srv_alias=() srv_slots=() srv_ctx=()
+if (( TIERED )); then
+  declare -A seen=()
+  for n in "${names[@]}"; do
+    tier=${n,,}
+    case "$tier" in
+      deep|fast) ;;
+      *) status "failed: SERVERS names must be DEEP or FAST (router tiers), got '$n'"; exit 1 ;;
+    esac
+    [[ -z "${seen[$tier]:-}" ]] || { status "failed: SERVERS lists $n twice"; exit 1; }
+    seen[$tier]=1
+    v=${n}_REPO; srv_repo+=("${!v}")
+    v=${n}_FILES; srv_files+=("${!v}")
+    v=${n}_RUNTIME; srv_runtime+=("${!v}")
+    v=${n}_ARGS; srv_args+=("${!v:-}")
+    v=${n}_GPUS; srv_gpus+=("${!v:-}")
+    v=${n}_CPUS; srv_cpus+=("${!v:-}")
+    v=${n}_ALIAS; srv_alias+=("${!v:-}")
+    v=${n}_SLOTS; srv_slots+=("${!v:-1}")
+    v=${n}_CTX; srv_ctx+=("${!v}")
+    srv_name+=("$tier")
+  done
+  ROUTER_POLICY=${ROUTER_POLICY:-difficulty+spill}
+  ROUTER_DEFAULT=${ROUTER_DEFAULT:-deep}
+  ROUTER_JUDGE=${ROUTER_JUDGE:-none}
+  command -v python3 >/dev/null || { status "failed: python3 not found (needed for router.py)"; exit 1; }
+  [[ -f "$LOCUS_DIR/router.py" ]] || { status "failed: $LOCUS_DIR/router.py not found"; exit 1; }
+else
+  srv_name=("") srv_repo=("$MODEL_REPO") srv_files=("$MODEL_FILES") srv_runtime=("$RUNTIME")
+  srv_args=("${LLAMA_ARGS:-}") srv_gpus=("") srv_cpus=("") srv_alias=("") srv_slots=(1) srv_ctx=("")
+fi
+for s in "${!srv_name[@]}"; do
+  label=${srv_name[s]:+${names[s]}_}
+  case "${srv_runtime[s]}" in
+    ik|mainline) ;;
+    *) status "failed: ${label}RUNTIME must be ik or mainline, got '${srv_runtime[s]}'"; exit 1 ;;
+  esac
+  command -v "llama-server-${srv_runtime[s]}" >/dev/null || { status "failed: llama-server-${srv_runtime[s]} not found"; exit 1; }
+  if (( TIERED )); then
+    [[ "${srv_slots[s]}" =~ ^[1-9][0-9]*$ ]] || { status "failed: ${label}SLOTS must be a positive integer"; exit 1; }
+    [[ "${srv_ctx[s]}" =~ ^[1-9][0-9]*$ ]] || { status "failed: ${label}CTX must be a positive integer"; exit 1; }
+    [[ -z "${srv_cpus[s]}" ]] || command -v taskset >/dev/null || { status "failed: ${label}CPUS set but taskset not found"; exit 1; }
+  fi
+done
 mkdir -p "$MODELS_DIR" || { status "failed: cannot create $MODELS_DIR"; exit 1; }
 
 if [[ -n "${CONTAINER_ID:-}" && -n "${CONTAINER_API_KEY:-}" ]]; then
@@ -169,13 +255,18 @@ else
 fi
 
 TUNNEL_LOOP_PID=""
-SERVER_PID=""
-# Stop the tunnel and the server when this script ends, so a failed machine
-# drops off the tunnel instead of answering 502 forever. The self-destruct
-# timer runs in its own session and is not touched.
+declare -A PID=()
+# Stop the tunnel, the servers and the router when this script ends, so a
+# failed machine drops off the tunnel instead of answering 502 forever. The
+# self-destruct timer runs in its own session and is not touched.
 cleanup() {
-  [[ -n "$TUNNEL_LOOP_PID" ]] && kill "$TUNNEL_LOOP_PID" 2>/dev/null
-  [[ -n "$SERVER_PID" ]] && kill "$SERVER_PID" 2>/dev/null
+  local p
+  # "|| true": under set -e a failed kill (child already gone) would end the
+  # trap before the remaining children are stopped.
+  [[ -z "$TUNNEL_LOOP_PID" ]] || kill "$TUNNEL_LOOP_PID" 2>/dev/null || true
+  for p in "${PID[@]}"; do
+    [[ -z "$p" ]] || kill "$p" 2>/dev/null || true
+  done
   return 0
 }
 trap cleanup EXIT
@@ -202,104 +293,251 @@ TUNNEL_LOOP_PID=$!
 log "cloudflared started (log: $STATE_DIR/cloudflared.log)"
 
 # ---------------------------------------------------------------------------
-# Download
+# Download (one hf download per repo)
 # ---------------------------------------------------------------------------
 
-read -r -a files <<<"$MODEL_FILES"
-status "downloading ${#files[@]} file(s) from $MODEL_REPO"
-t0=$(date +%s)
-ok=0
-for attempt in 1 2 3; do
-  if hf download "$MODEL_REPO" "${files[@]}" --local-dir "$MODELS_DIR" >>"$STATE_DIR/download.log" 2>&1; then
-    ok=1
-    break
-  fi
-  log "download attempt $attempt failed (see $STATE_DIR/download.log)"
-  sleep $(( attempt * 10 ))
+# Where a repo's files land: MODELS_DIR itself in single mode (as always), a
+# subfolder per repo in tiered mode so two repos cannot collide.
+repo_dir() {
+  if (( TIERED )); then echo "$MODELS_DIR/${1//\//--}"; else echo "$MODELS_DIR"; fi
+}
+
+repos=()
+declare -A repo_files=()
+for s in "${!srv_name[@]}"; do
+  r=${srv_repo[s]}
+  [[ -n "${repo_files[$r]+x}" ]] || repos+=("$r")
+  read -r -a files <<<"${srv_files[s]}"
+  for f in "${files[@]}"; do
+    [[ " ${repo_files[$r]:-} " == *" $f "* ]] || repo_files[$r]+="${repo_files[$r]:+ }$f"
+  done
 done
-[[ "$ok" -eq 1 ]] || fail "download failed after 3 attempts"
-for f in "${files[@]}"; do
-  [[ -s "$MODELS_DIR/$f" ]] || fail "downloaded file missing: $f"
+
+t0=$(date +%s)
+for r in "${repos[@]}"; do
+  read -r -a files <<<"${repo_files[$r]}"
+  dir=$(repo_dir "$r")
+  mkdir -p "$dir" || fail "cannot create $dir"
+  status "downloading ${#files[@]} file(s) from $r"
+  ok=0
+  for attempt in 1 2 3; do
+    if hf download "$r" "${files[@]}" --local-dir "$dir" >>"$STATE_DIR/download.log" 2>&1; then
+      ok=1
+      break
+    fi
+    log "download attempt $attempt failed (see $STATE_DIR/download.log)"
+    sleep $(( attempt * 10 ))
+  done
+  [[ "$ok" -eq 1 ]] || fail "download failed after 3 attempts"
+  for f in "${files[@]}"; do
+    [[ -s "$dir/$f" ]] || fail "downloaded file missing: $f"
+  done
 done
 log "download done in $(( $(date +%s) - t0 ))s ($(du -sh "$MODELS_DIR" | cut -f1))"
 
-model=""
-for f in "${files[@]}"; do
-  if [[ "$f" == *-00001-of-*.gguf ]]; then model=$MODELS_DIR/$f; break; fi
-done
-model=${model:-$MODELS_DIR/${files[0]}}
-
 # ---------------------------------------------------------------------------
-# Server (supervised)
+# Servers and router (supervised)
 # ---------------------------------------------------------------------------
 
 umask 077
 printf '%s\n' "$LLAMA_API_KEY" >"$RUN_DIR/api-key"
 umask 022
 
-case "$RUNTIME" in
-  ik) runtime_args=(--defer-ple) ;;
-  mainline) runtime_args=(--fit off) ;;
-esac
-# Split LLAMA_ARGS into words without eval: xargs honours single and double
+# Children, in start order. Each has a command (array CMD_<i>), a log, a port
+# whose /health tells when it is up, and optional GPU/CPU pinning.
+children=() c_log=() c_port=() c_gpus=() c_cpus=() c_router=()
+backend_specs=()
+
+# Split extra flags into words without eval: xargs honours single and double
 # quotes (no backslash escapes inside quotes), so pass JSON in single quotes:
 #   LLAMA_ARGS="-ncmoe 14 --chat-template-kwargs '{\"reasoning_effort\":\"low\"}'"
-extra_args=()
-if [[ -n "${LLAMA_ARGS:-}" ]]; then
-  split=$(xargs -n1 printf '%s\n' <<<"$LLAMA_ARGS" 2>&1) || fail "cannot parse LLAMA_ARGS: $split"
-  mapfile -t extra_args <<<"$split"
-fi
-server_cmd=("llama-server-$RUNTIME" -m "$model"
-  --host 127.0.0.1 --port "$PORT"
-  --api-key-file "$RUN_DIR/api-key"
-  -ngl 999 -np 1 --jinja
-  "${runtime_args[@]}" "${extra_args[@]}")
-log "server command: ${server_cmd[*]}"
-
-# start_and_wait -> 0 when /health answers 200, 1 if the process exits or times out.
-start_and_wait() {
-  local t0 deadline
-  t0=$(date +%s)
-  deadline=$(( t0 + STARTUP_TIMEOUT ))
-  "${server_cmd[@]}" >>"$STATE_DIR/server.log" 2>&1 &
-  SERVER_PID=$!
-  while (( $(date +%s) < deadline )); do
-    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-      wait "$SERVER_PID" 2>/dev/null || true
-      log "server exited during startup (see $STATE_DIR/server.log)"
-      return 1
-    fi
-    if [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/health")" == 200 ]]; then
-      log "server ready in $(( $(date +%s) - t0 ))s"
-      return 0
-    fi
-    sleep 2
-  done
-  log "server not healthy after ${STARTUP_TIMEOUT}s"
-  kill "$SERVER_PID" 2>/dev/null || true
-  wait "$SERVER_PID" 2>/dev/null || true
-  return 1
+split_args() {  # split_args NAME VALUE -> fills the array named NAME
+  local -n out=$1
+  local split
+  out=()
+  if [[ -n "$2" ]]; then
+    split=$(xargs -n1 printf '%s\n' <<<"$2" 2>&1) || fail "cannot parse $3: $split"
+    mapfile -t out <<<"$split"
+  fi
 }
 
-status "loading model ($RUNTIME)"
-start_and_wait || fail "server failed to start"
-status "ready"
+for s in "${!srv_name[@]}"; do
+  read -r -a files <<<"${srv_files[s]}"
+  dir=$(repo_dir "${srv_repo[s]}")
+  model=""
+  for f in "${files[@]}"; do
+    if [[ "$f" == *-00001-of-*.gguf ]]; then model=$dir/$f; break; fi
+  done
+  model=${model:-$dir/${files[0]}}
 
-failures=0
-while true; do
-  wait "$SERVER_PID" && rc=0 || rc=$?
-  if [[ -e "$STATE_DIR/expired" ]]; then
-    status "expired"
-    exit 0
-  fi
-  log "server exited with status $rc; restarting"
-  status "restarting after crash (exit $rc)"
-  if start_and_wait; then
-    failures=0
-    status "ready"
+  case "${srv_runtime[s]}" in
+    ik) runtime_args=(--defer-ple) ;;
+    mainline) runtime_args=(--fit off) ;;
+  esac
+  if (( TIERED )); then
+    port=$(( PORT + 1 + s ))
+    args_name=${names[s]}_ARGS
+    slot_args=(-np "${srv_slots[s]}" -c "$(( srv_slots[s] * srv_ctx[s] ))")
+    tier_args=(--metrics)
+    [[ -z "${srv_alias[s]}" ]] || tier_args+=(--alias "${srv_alias[s]}")
+    logf=$STATE_DIR/server-${srv_name[s]}.log
+    backend_specs+=(--backend "${srv_name[s]}=$port:${srv_slots[s]}:${srv_ctx[s]}")
+    # ik ignores --alias in its answers; the router rewrites the model name
+    [[ -z "${srv_alias[s]}" ]] || backend_specs+=(--alias "${srv_name[s]}=${srv_alias[s]}")
   else
-    failures=$(( failures + 1 ))
-    (( failures < MAX_RESTARTS )) || fail "server failed to restart $failures times in a row"
-    sleep $(( failures * 10 ))
+    port=$PORT
+    args_name=LLAMA_ARGS
+    slot_args=(-np 1)
+    tier_args=()
+    logf=$STATE_DIR/server.log
   fi
+  extra_args=()
+  split_args extra_args "${srv_args[s]}" "$args_name"
+  i=${#children[@]}
+  declare -ga "CMD_$i=()"
+  # shellcheck disable=SC2178  # a nameref to the array CMD_<i>
+  declare -n cmd="CMD_$i"
+  cmd=("llama-server-${srv_runtime[s]}" -m "$model"
+    --host 127.0.0.1 --port "$port"
+    --api-key-file "$RUN_DIR/api-key"
+    -ngl 999 "${slot_args[@]}" --jinja
+    "${tier_args[@]}" "${runtime_args[@]}" "${extra_args[@]}")
+  unset -n cmd
+  children+=("${srv_name[s]:-server}")
+  c_log+=("$logf") c_port+=("$port") c_gpus+=("${srv_gpus[s]}") c_cpus+=("${srv_cpus[s]}") c_router+=(0)
+done
+
+if (( TIERED )); then
+  i=${#children[@]}
+  declare -ga "CMD_$i=()"
+  # shellcheck disable=SC2178  # a nameref to the array CMD_<i>
+  declare -n cmd="CMD_$i"
+  cmd=(python3 "$LOCUS_DIR/router.py" --host 127.0.0.1 --port "$PORT"
+    --key-file "$RUN_DIR/api-key" "${backend_specs[@]}"
+    --policy "$ROUTER_POLICY" --default "$ROUTER_DEFAULT" --judge "$ROUTER_JUDGE"
+    --log "$STATE_DIR/router.jsonl")
+  unset -n cmd
+  children+=(router) c_log+=("$STATE_DIR/router.log") c_port+=("$PORT") c_gpus+=("") c_cpus+=("") c_router+=(1)
+fi
+
+for i in "${!children[@]}"; do
+  # shellcheck disable=SC2178  # a nameref to the array CMD_<i>
+  declare -n cmd="CMD_$i"
+  log "${children[i]} command:${c_gpus[i]:+ CUDA_VISIBLE_DEVICES=${c_gpus[i]}}${c_cpus[i]:+ taskset -c ${c_cpus[i]}} ${cmd[*]}"
+  unset -n cmd
+done
+
+# Per child: state starting|up|down, PID, start time, consecutive failures,
+# earliest restart time.
+declare -A STATE=() STARTED=() FAILS=() NEXT_AT=()
+
+child_start() {
+  local i=$1
+  # shellcheck disable=SC2178  # a nameref to the array CMD_<i>
+  declare -n cmd="CMD_$i"
+  local pre=()
+  [[ -z "${c_cpus[i]}" ]] || pre=(taskset -c "${c_cpus[i]}")
+  (
+    [[ -z "${c_gpus[i]}" ]] || export CUDA_VISIBLE_DEVICES=${c_gpus[i]}
+    exec "${pre[@]}" "${cmd[@]}"
+  ) >>"${c_log[i]}" 2>&1 &
+  PID[$i]=$!
+  STATE[$i]=starting
+  STARTED[$i]=$(date +%s)
+}
+
+# Up = /health answers 200. The router answers 503 while a backend is down,
+# which still means the router itself is up.
+child_healthy() {
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${c_port[$1]}/health")
+  [[ "$code" == 200 ]] || { [[ "${c_router[$1]}" == 1 && "$code" == 503 ]]; }
+}
+
+# A start that failed (exited or timed out during startup): back off, or give up.
+child_failed() {
+  local i=$1 why=$2
+  log "${children[i]} $why (see ${c_log[i]})"
+  PID[$i]=""
+  STATE[$i]=down
+  if (( INITIAL )); then
+    fail "${children[i]} failed to start"
+  fi
+  FAILS[$i]=$(( ${FAILS[$i]:-0} + 1 ))
+  (( FAILS[$i] < MAX_RESTARTS )) || fail "${children[i]} failed to restart ${FAILS[$i]} times in a row"
+  NEXT_AT[$i]=$(( $(date +%s) + FAILS[$i] * 10 ))
+}
+
+# One pass over all children: reap, health-check, restart. Returns quickly.
+supervise() {
+  local i pid rc now
+  for i in "${!children[@]}"; do
+    pid=${PID[$i]:-}
+    now=$(date +%s)
+    case "${STATE[$i]:-down}" in
+      starting)
+        if ! kill -0 "$pid" 2>/dev/null; then
+          wait "$pid" 2>/dev/null || true
+          if [[ -e "$STATE_DIR/expired" ]]; then status "expired"; exit 0; fi
+          child_failed "$i" "exited during startup"
+        elif child_healthy "$i"; then
+          log "${children[i]} ready in $(( now - STARTED[$i] ))s"
+          STATE[$i]=up
+          FAILS[$i]=0
+        elif (( now - STARTED[$i] >= STARTUP_TIMEOUT )); then
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          child_failed "$i" "not healthy after ${STARTUP_TIMEOUT}s"
+        fi
+        ;;
+      up)
+        if ! kill -0 "$pid" 2>/dev/null; then
+          wait "$pid" && rc=0 || rc=$?
+          PID[$i]=""
+          if [[ -e "$STATE_DIR/expired" ]]; then status "expired"; exit 0; fi
+          log "${children[i]} exited with status $rc; restarting"
+          if (( TIERED )); then
+            status "restarting ${children[i]} after crash (exit $rc)"
+          else
+            status "restarting after crash (exit $rc)"
+          fi
+          STATE[$i]=down
+          NEXT_AT[$i]=0
+        fi
+        ;;
+      down)
+        if (( now >= ${NEXT_AT[$i]:-0} )); then child_start "$i"; fi
+        ;;
+    esac
+  done
+  return 0
+}
+
+all_up() {
+  local i
+  for i in "${!children[@]}"; do
+    [[ "${STATE[$i]:-}" == up ]] || return 1
+  done
+  # In tiered mode the router must also see every backend as healthy.
+  (( ! TIERED )) || [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/health")" == 200 ]]
+}
+
+if (( TIERED )); then
+  status "loading models (${srv_runtime[*]})"
+else
+  status "loading model ($RUNTIME)"
+fi
+INITIAL=1
+for i in "${!children[@]}"; do child_start "$i"; done
+last=""
+while true; do
+  supervise
+  if all_up; then
+    INITIAL=0
+    [[ "$last" == ready ]] || status "ready"
+    last=ready
+  else
+    last=""
+  fi
+  sleep 2
 done

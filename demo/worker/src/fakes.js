@@ -51,12 +51,14 @@ export function fakeLlama({ key, words = ["Hello", " from", " the", " fake", " m
     if (status !== 200) return new Response("upstream broke", { status });
     const enc = new TextEncoder();
     const chunks = [];
+    // a tiered box names the model that answered, like llama-server's --alias
+    const tag = (c) => (typeof body.model === "string" ? { model: body.model, ...c } : c);
     if (body.chat_template_kwargs?.enable_thinking) chunks.push({ choices: [{ index: 0, delta: { reasoning_content: "Thinking..." } }] });
     for (const w of words) chunks.push({ choices: [{ index: 0, delta: { content: w } }] });
     chunks.push({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }], timings: { predicted_n: words.length, predicted_per_second: 41.2 } });
     const stream = new ReadableStream({
       start(c) {
-        for (const ch of chunks) c.enqueue(enc.encode(`data: ${JSON.stringify(ch)}\n\n`));
+        for (const ch of chunks) c.enqueue(enc.encode(`data: ${JSON.stringify(tag(ch))}\n\n`));
         c.enqueue(enc.encode("data: [DONE]\n\n"));
         c.close();
       },
@@ -127,6 +129,17 @@ export function fakeCloudflare() {
   };
 }
 
+export const RECORDING_OFFER = {
+  id: 3, machine_id: 33, num_gpus: 1, gpu_name: "RTX 3090", cpu_name: "AMD Threadripper PRO 9995WX",
+  cpu_ram: 262_144, dph_total: 0.55, verification: "verified", rentable: true, rented: false, reliability: 0.999,
+  disk_space: 300, inet_down: 1500, cuda_max_good: 13, end_date: 4102444800,
+};
+
+export const RECORDING_TIERED_OFFER = { ...RECORDING_OFFER, id: 4, machine_id: 44, num_gpus: 2, dph_total: 0.85 };
+export const RECORDING_EPYC_OFFER = {
+  ...RECORDING_TIERED_OFFER, id: 5, machine_id: 55, cpu_name: "AMD EPYC 7742 64-Core Processor", cpu_ram: 241_675, pci_gen: 4,
+};
+
 let devState; // survives between requests inside one `wrangler dev` isolate
 export function devFakes(cfg) {
   if (!devState) {
@@ -136,7 +149,7 @@ export function devFakes(cfg) {
       turnstile: fakeTurnstile(),
       email: fakeEmail(),
       openai: fakeOpenAI(),
-      vast: fakeVast(),
+      vast: fakeVast(cfg.recording ? { offers: [RECORDING_OFFER, RECORDING_TIERED_OFFER, RECORDING_EPYC_OFFER] } : {}),
       cf: fakeCloudflare(),
     };
   }

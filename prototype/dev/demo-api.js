@@ -4,13 +4,16 @@
 // Pick the status to show, first match wins:
 //   1. ?demo=<status> on the page address (the dev bar at the bottom of /demo sets it),
 //      plus &step=reserving|downloading|loading for "booting", &left=<minutes> for "ready",
-//      and &chat=401|409|413|502 to make the chat fail that way
+//      and &chat=401|409|413|502 to make the chat fail that way,
+//      and &models=0 for a single-model box (no Auto / Deep / Fast picker)
 //   2. the cookie set by /api/demo/confirm?token=<status> (any other token means "ready")
 //   3. DEMO_STATUS=<status> in the environment:  DEMO_STATUS=ready npm run dev
 //   4. "none"
 // Status "unreachable" answers 503, like the site with no Worker bound.
 
 import { cleanLead } from "../shared/lead.js";
+import { previewInvoiceReview, recordingAnswer, recordingApi, recordingStatus } from "./recording-api.js";
+import { invoice, usd } from "../shared/invoice.js";
 
 const STATUSES = ["none", "checking", "review", "queued", "booting", "ready", "rejected", "failed", "ended", "unreachable"];
 const COOKIE = "locus_demo_dev";
@@ -33,15 +36,24 @@ const readBody = (req, max) => new Promise((resolve) => {
 });
 
 // the page's own query string travels in the Referer header of every fetch it makes
-function pick(req) {
-  let page = new URLSearchParams();
-  try { page = new URL(req.headers.referer).searchParams; } catch { /* no referer */ }
-  const cookie = /(?:^|;\s*)locus_demo_dev=([a-z]+)/.exec(req.headers.cookie ?? "")?.[1];
-  const status = [page.get("demo"), cookie, process.env.DEMO_STATUS].find((s) => STATUSES.includes(s)) ?? "none";
-  return { status, step: page.get("step"), left: page.get("left"), chat: page.get("chat") };
+function pageParams(req) {
+  try { return new URL(req.headers.referer).searchParams; } catch { return new URLSearchParams(); }
 }
 
+function pick(req) {
+  const page = pageParams(req);
+  const cookie = /(?:^|;\s*)locus_demo_dev=([a-z]+)/.exec(req.headers.cookie ?? "")?.[1];
+  const status = [page.get("demo"), cookie, process.env.DEMO_STATUS].find((s) => STATUSES.includes(s)) ?? "none";
+  return { status, step: page.get("step"), left: page.get("left"), chat: page.get("chat"), models: page.get("models") !== "0" };
+}
+
+// a tiered box, like CHAT_MODELS on the Worker; the label of deep/fast is what llama-server's --alias streams back
+const MODELS = [{ id: "auto", label: "Auto" }, { id: "deep", label: "Qwen3.8-Flash-Next" }, { id: "fast", label: "Qwen3.8-27B" }];
+const labelOf = (id) => MODELS.find((m) => m.id === id)?.label;
+
 function status(req, res) {
+  const recording = recordingStatus(req, pageParams(req));
+  if (recording) return send(res, 200, recording);
   const p = pick(req);
   if (p.status === "unreachable") return send(res, 503, { ok: false, error: "The live demo is not set up yet." });
   const out = { ok: true, status: p.status };
@@ -57,6 +69,7 @@ function status(req, res) {
     out.ends_at = new Date(Date.now() + left * 60_000).toISOString();
     out.hardware = { cpu: "AMD EPYC 9654", ram_gb: 128, gpu: "RTX 5090" };
     out.model = "Qwen3.8-Flash-Next";
+    if (p.models) out.models = MODELS;
   }
   send(res, 200, out);
 }
@@ -152,19 +165,33 @@ const pieces = (text) => text.match(/\s*[\w€.,%×−–'’]+|\s*[^\s\w]|\s+/g
 async function chat(req, res) {
   if (req.method !== "POST") return send(res, 405, { ok: false, error: "Use POST." });
   const p = pick(req);
+  const recording = recordingStatus(req, pageParams(req));
+  if (recording) Object.assign(p, { status: recording.status, models: recording.models });
   const { body, tooBig } = await readBody(req, 200_000);
   if (tooBig || p.chat === "413") return send(res, 413, { ok: false, error: "Too large." });
   if (p.chat === "401" || p.status === "none") return send(res, 401, { ok: false, error: "No demo session." });
   if (p.chat === "409" || p.status !== "ready") return send(res, 409, { ok: false, error: "Your demo has ended." });
   if (p.chat === "502") return send(res, 502, { ok: false, error: "The machine is not answering." });
   if (!Array.isArray(body?.messages) || !body.messages.length) return send(res, 400, { ok: false, error: "No messages." });
+  if (p.models && body.model !== undefined && !(recording ? p.models.some(({ id }) => id === body.model) : labelOf(body.model))) {
+    return send(res, 400, { ok: false, error: "Bad request: model." });
+  }
 
+  const resolution = body.invoice_review === "resolution";
+  const reviewRequested = resolution || body.invoice_review === true;
+  if (reviewRequested && !recording?.invoice_review) {
+    return send(res, 403, { ok: false, error: "Invoice review is unavailable for this session." });
+  }
+  const review = reviewRequested ? previewInvoiceReview() : null;
   const last = String(body.messages.at(-1)?.content ?? "");
   const kind = topic(last.split("</document>").at(-1));
   const think = body.thinking ? pieces(THOUGHTS[kind]) : [];
   // "echo: <text>" streams the text back as the answer: handy to check what the page does with hostile markdown
   const echo = /^echo:\s?([\s\S]*)$/.exec(last)?.[1];
-  const words = pieces(echo ?? ANSWERS[kind]);
+  const answer = review
+    ? previewReviewAnswer(review, resolution)
+    : echo ?? recordingAnswer(recording, last) ?? ANSWERS[kind];
+  const words = pieces(answer);
   const promptN = Math.round(body.messages.reduce((n, m) => n + String(m.content ?? "").length, 0) / 3.8);
   const speed = 38 + Math.random() * 8; // tokens a second, about what the benchmark aims for
 
@@ -172,7 +199,10 @@ async function chat(req, res) {
   res.setHeader("content-type", "text/event-stream; charset=utf-8");
   res.setHeader("cache-control", "no-cache");
   res.setHeader("connection", "keep-alive");
-  const id = `chatcmpl-dev${Date.now()}`, created = Math.floor(Date.now() / 1000), model = "Qwen3.8-Flash-Next";
+  // Auto: a stand-in for the router's pick, so the page can be seen naming either model
+  const tier = review ? (resolution ? "deep" : "fast")
+    : !p.models || !body.model ? null : body.model !== "auto" ? body.model : body.thinking || last.length > 2000 ? "deep" : "fast";
+  const id = `chatcmpl-dev${Date.now()}`, created = Math.floor(Date.now() / 1000), model = tier ? labelOf(tier) : "Qwen3.8-Flash-Next";
   const chunk = (delta, extra = {}) => res.write(`data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model, system_fingerprint: "dev", choices: [{ index: 0, delta, finish_reason: null }], ...extra })}\n\n`);
 
   let closed = false;
@@ -180,6 +210,7 @@ async function chat(req, res) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   await sleep(350 + promptN / 6); // reading the prompt
+  if (review) chunk({}, { invoice_sources: review.source });
   chunk({ role: "assistant", content: null });
   const t0 = Date.now();
   for (const w of think) { if (closed) return; chunk({ reasoning_content: w }); await sleep(1000 / speed); }
@@ -192,8 +223,17 @@ async function chat(req, res) {
   res.end();
 }
 
+function previewReviewAnswer(review, resolution) {
+  const { purchase_order: order, goods_receipt: receipt } = review.source;
+  if (resolution) {
+    return `**Payment review**\n\nThe records support **${usd(receipt.units * receipt.unit_price_usd)}** for the ${receipt.units} units received. Keep the invoice on hold while finance resolves the **${usd(review.discrepancy)}** difference. If the supplier says the remaining ${review.excess} units arrived separately, ask for proof of delivery and have receiving confirm it against the purchase order. Otherwise, ask for a corrected invoice or credit.\n\n**Draft email**\n\nHi ${invoice.supplier}, our receipt ${receipt.id} for ${order.id} shows ${receipt.units} units, while invoice ${invoice.id} bills for ${invoice.units}. Could you send proof of delivery for the remaining ${review.excess} units or issue a corrected invoice or credit? Thank you.`;
+  }
+  return `The invoice bills for ${invoice.units} units. ${order.id} and ${receipt.id} both show ${receipt.units} units. The extra ${review.excess} units at ${usd(invoice.unitPrice)} each are a **${usd(review.discrepancy)} discrepancy**.`;
+}
+
 export function demoApi(req, res, next) {
   const path = req.url.split("?")[0];
+  if (path.startsWith("/recording/")) return recordingApi(path, req, res, pageParams(req), send, readBody);
   if (path === "/status") return status(req, res);
   if (path === "/request") return request(req, res);
   if (path === "/confirm") return confirm(req, res);

@@ -7,13 +7,44 @@ const num = (value, fallback) => {
 };
 const str = (value, fallback = "") => (value === undefined || value === null || value === "" ? fallback : String(value));
 const list = (value, fallback = []) => (value ? String(value).split(",").map((s) => s.trim()).filter(Boolean) : fallback);
+// "id:label,id:label" -> [{id, label}]; a missing label falls back to the id
+const models = (value) =>
+  list(value).map((item) => {
+    const at = item.indexOf(":");
+    const id = (at < 0 ? item : item.slice(0, at)).trim();
+    return { id, label: (at < 0 ? "" : item.slice(at + 1).trim()) || id };
+  }).filter((m) => m.id);
+
+// Tiered box: several model servers behind router.py on the machine (demo/instance/README.md).
+// SERVERS empty -> null: one server from MODEL_REPO/MODEL_FILES/RUNTIME/LLAMA_ARGS. Otherwise the
+// env vars for the machine: SERVERS, then for each name N in it the set N_* vars below, then the
+// set ROUTER_* vars, passed through as they are (onstart.sh validates them and has the defaults).
+const SERVER_FIELDS = ["REPO", "FILES", "RUNTIME", "ARGS", "GPUS", "CPUS", "ALIAS", "SLOTS", "CTX"];
+const ROUTER_VARS = ["ROUTER_POLICY", "ROUTER_DEFAULT", "ROUTER_JUDGE"];
+export function tieredEnv(env) {
+  const names = str(env.SERVERS).split(/\s+/).filter(Boolean);
+  if (!names.length) return null;
+  const out = { SERVERS: names.join(" ") };
+  for (const n of names) for (const f of SERVER_FIELDS) out[`${n}_${f}`] = str(env[`${n}_${f}`]);
+  for (const k of ROUTER_VARS) out[k] = str(env[k]);
+  return out;
+}
 
 export function config(env) {
   const windowMinutes = num(env.DEMO_WINDOW_MINUTES, 120);
   const bootTimeoutMinutes = num(env.BOOT_TIMEOUT_MINUTES, 45);
+  const recording = env.RECORDING_TAKE_ID ? {
+    take: str(env.RECORDING_TAKE_ID),
+    key: str(env.RECORDING_ACCESS_KEY),
+    expiresAt: str(env.RECORDING_EXPIRES_AT),
+    maxDph: num(env.RECORDING_MAX_DPH, 0),
+    offerId: num(env.RECORDING_OFFER_ID, 0),
+  } : null;
   return {
     siteUrl: str(env.SITE_URL, "https://locus-ai.tech").replace(/\/$/, ""),
     secret: str(env.SIGNING_SECRET),
+    devFakes: env.DEV_FAKES === "1",
+    recording,
     ownerEmail: str(env.OWNER_EMAIL),
     emailFrom: str(env.EMAIL_FROM, "locus <demo@example.com>"),
     resendKey: str(env.RESEND_API_KEY),
@@ -57,6 +88,7 @@ export function config(env) {
     vastRuntype: str(env.VAST_RUNTYPE, "args"),
     vastOnstart: str(env.VAST_ONSTART),
     vastGpuName: str(env.VAST_GPU_NAME, "RTX 5090"),
+    vastNumGpus: num(env.VAST_NUM_GPUS, 1),
     vastRamTiersGb: list(env.VAST_RAM_TIERS_GB, ["192", "128"]).map(Number),
     vastMinReliability: num(env.VAST_MIN_RELIABILITY, 0.99),
     vastMinInetDown: num(env.VAST_MIN_INET_DOWN, 1000),
@@ -69,19 +101,22 @@ export function config(env) {
     runtime: str(env.RUNTIME, "ik"),
     llamaArgs: str(env.LLAMA_ARGS),
     modelLabel: str(env.MODEL_LABEL, "Qwen3.8-Flash-Next"),
+    tieredEnv: tieredEnv(env), // null, or the SERVERS/<N>_*/ROUTER_* vars for a tiered box
 
     // Cloudflare (tunnel + DNS)
     cfAccountId: str(env.CF_ACCOUNT_ID),
     cfZoneId: str(env.CF_ZONE_ID),
     cfApiToken: str(env.CF_API_TOKEN),
     demoDomain: str(env.DEMO_DOMAIN), // e.g. demo.example.com -> locus-demo-<id>.demo.example.com
-    resourcePrefix: "locus-demo-",
+    resourcePrefix: recording ? "locus-recording-" : "locus-demo-",
 
     // chat proxy
     chatMaxBodyBytes: num(env.CHAT_MAX_BODY_BYTES, 400_000),
     chatMaxTokens: num(env.CHAT_MAX_TOKENS, 4096),
     chatMaxMessages: num(env.CHAT_MAX_MESSAGES, 60),
     thinkingKwarg: str(env.CHAT_THINKING_KWARG, "enable_thinking"),
+    // models the visitor may pick (a tiered box); empty = one model, no picker
+    chatModels: models(env.CHAT_MODELS),
     upstreamTimeoutMs: num(env.UPSTREAM_TIMEOUT_MS, 30_000),
 
     // Phase 2 manual mode: one machine started by hand
@@ -90,6 +125,7 @@ export function config(env) {
           url: str(env.MANUAL_UPSTREAM_URL).replace(/\/$/, ""),
           key: str(env.MANUAL_UPSTREAM_KEY),
           accessKey: str(env.MANUAL_ACCESS_KEY),
+          invoiceMcpUrl: str(env.MANUAL_INVOICE_MCP_URL),
           endsAt: str(env.MANUAL_ENDS_AT),
           cpu: str(env.MANUAL_HW_CPU),
           ramGb: num(env.MANUAL_HW_RAM_GB, 0),

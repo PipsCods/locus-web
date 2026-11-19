@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1.7
 #
 # locus demo instance image: ik_llama.cpp + mainline llama.cpp built for the
-# RTX 5090 (sm_120), plus the tools the start script and the benchmark need.
+# RTX 5090 (sm_120) and RTX 3090 (sm_86, the two-GPU tiered box), plus the
+# tools the start script and the benchmark need.
 # Weights are NOT baked in; they are downloaded at boot (see onstart.sh).
 #
 # Build from the repo root:
@@ -54,7 +55,7 @@ FROM toolchain AS ik
 
 ARG IK_REPO=https://github.com/ikawrakow/ik_llama.cpp
 ARG IK_REF=a6383da414f74c944999e7b9312a5a5d76191f6b
-ARG CUDA_ARCHITECTURES=120
+ARG CUDA_ARCHITECTURES="86;120"
 ARG IK_CPU_VARIANTS="v3 zen4"
 ARG BUILD_JOBS=
 
@@ -97,7 +98,7 @@ FROM toolchain AS mainline
 
 ARG MAINLINE_REPO=https://github.com/ggml-org/llama.cpp
 ARG MAINLINE_REF=ad5cbfa911b975b2bf987d3bf7d8f2b3f36671ab
-ARG CUDA_ARCHITECTURES=120
+ARG CUDA_ARCHITECTURES="86;120"
 ARG BUILD_JOBS=
 
 RUN fetch-ref "$MAINLINE_REPO" "$MAINLINE_REF" /src/mainline
@@ -157,7 +158,7 @@ RUN python3 -m venv /opt/venv \
 COPY --from=ik /opt/ik /opt/ik
 COPY --from=mainline /opt/mainline /opt/mainline
 
-COPY llama-wrapper.sh onstart.sh bench.sh /opt/locus/
+COPY llama-wrapper.sh onstart.sh bench.sh router.py /opt/locus/
 COPY prompts/ /opt/locus/prompts/
 RUN chmod +x /opt/locus/*.sh \
  && for n in llama-server-ik llama-bench-ik llama-server-mainline llama-bench-mainline; do \

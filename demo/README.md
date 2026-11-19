@@ -28,6 +28,9 @@ browser ──/api/demo/*──▶ Pages Function ──service binding DEMO─�
                                                                               (instance/onstart.sh)
 ```
 
+On a tiered box, `:8080` is `instance/router.py` instead, in front of two
+llama-servers on `:8081` (deep) and `:8082` (fast).
+
 Two contracts hold the parts together. Change either side only together with
 the other:
 
@@ -36,7 +39,9 @@ the other:
   `prototype/dev/demo-api.js` imitates them for `npm run dev`.
 - **Worker ↔ machine**: the environment variables `onstart.sh` reads
   (`MODEL_REPO`, `MODEL_FILES`, `RUNTIME`, `LLAMA_ARGS`, `LLAMA_API_KEY`,
-  `CF_TUNNEL_TOKEN`, `DEMO_TTL_SECONDS`), listed in
+  `CF_TUNNEL_TOKEN`, `DEMO_TTL_SECONDS`; for a tiered box with two models
+  behind `router.py`, `SERVERS` with per-server `<N>_*` variables and
+  `ROUTER_*` instead of the first four), listed in
   [`instance/README.md`](instance/README.md#demo-machine-env-contract).
 
 ## Two sample reports
@@ -47,3 +52,5 @@ visitors load on the page. `instance/prompts/sample-report.txt` (Kestrel Valve
 results in `BENCHMARK.md` refer to it. Both are invented. They are kept apart
 so that editing the page's example does not silently change what the recorded
 benchmark measured.
+
+The [recording walkthrough](recording/README.md) has a separate supplier invoice, purchase order and goods receipt.

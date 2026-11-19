@@ -26,12 +26,48 @@
 <!-- one page, several states: demo.js asks /api/demo/status and shows the matching section -->
 <main class="check demo" id="top">
   <div class="wrap">
+    <p class="recording__mode label" data-recording-mode hidden></p>
 
     <section class="demo__view" data-view="loading" aria-busy="true">
       <header class="check__head">
         <p class="label">Try it live</p>
         <h1>One moment…</h1>
       </header>
+    </section>
+
+    <section class="demo__view" data-view="recording" hidden>
+      <header class="check__head recording__head">
+        <h1>Try AI on your server.</h1>
+        <p class="lead">Choose the server you already own and how many people will use AI.</p>
+      </header>
+      <form class="recording__form" data-recording-form>
+        <fieldset class="step">
+          <legend>Your server</legend>
+          <div class="recording__choices" data-recording-profiles></div>
+        </fieldset>
+        <fieldset class="step">
+          <legend>Users</legend>
+          <div class="recording__choices" data-recording-users></div>
+        </fieldset>
+        <fieldset class="step">
+          <legend>Validation key</legend>
+          <div class="field recording__key">
+            <label class="sr" for="recording-key">Validation key</label>
+            <input type="password" id="recording-key" name="key" maxlength="256" autocomplete="off" required aria-describedby="recording-error">
+          </div>
+        </fieldset>
+        <div class="check__go">
+          <button class="btn" type="submit" data-recommend>See recommendation</button>
+          <p class="field__error" id="recording-error" role="alert" hidden></p>
+        </div>
+      </form>
+      <section class="recording__result" data-recommendation aria-labelledby="recording-result-title" hidden>
+        <p class="label">Recommended setup</p>
+        <h2 id="recording-result-title" tabindex="-1"><span data-rec-gpu></span><span data-rec-model></span></h2>
+        <p class="side__text">Flash-Next uses the server’s CPU and memory alongside a GPU.</p>
+        <p class="recording__availability" data-rec-availability role="status"></p>
+        <button class="btn" type="button" data-reserve>Reserve demo server</button>
+      </section>
     </section>
 
     <!-- status "none": ask for a demo -->
@@ -83,7 +119,10 @@
       </header>
       <ol class="track" data-track></ol>
       <p class="demo__eta" data-eta hidden></p>
-      <p class="demo__note">You can close this tab. We will email you a link as soon as your server is ready, and your two hours start only then.</p>
+      <p class="demo__note" data-wait-note>You can close this tab. We will email you a link as soon as your server is ready, and your two hours start only then.</p>
+      <div class="demo__actions" data-preview-chat-action hidden>
+        <button class="btn" type="button" data-preview-chat>Open chat</button>
+      </div>
     </section>
 
     <!-- rejected, failed, ended, or the demo is not reachable at all -->
@@ -100,7 +139,7 @@
     <section class="demo__view chat" data-view="chat" hidden>
       <div class="chat__main">
         <header class="machine">
-          <p class="machine__live"><span class="machine__dot" aria-hidden="true"></span><span class="label">Live</span><strong data-model></strong></p>
+          <p class="machine__live"><span class="machine__dot" aria-hidden="true"></span><span class="label" data-machine-label>Live</span><strong data-model></strong></p>
           <p class="machine__hw" data-hardware></p>
           <p class="machine__left" data-left hidden></p>
         </header>
@@ -125,6 +164,11 @@
               <span class="switch__track" aria-hidden="true"></span>
               <span>Think first <span class="switch__hint">slower, better on hard questions</span></span>
             </label>
+            <div class="pick" role="radiogroup" aria-label="Model" data-pick hidden>
+              <label class="pick__opt" title="Auto picks the right model for each question"><input type="radio" name="model" value="auto" checked><span>Auto</span><span class="sr">: picks the right model for each question</span></label>
+              <label class="pick__opt" title="Deep: the large model, best for hard questions"><input type="radio" name="model" value="deep"><span>Deep</span><span class="sr">: the large model, best for hard questions</span></label>
+              <label class="pick__opt" title="Fast: quicker answers for everyday questions"><input type="radio" name="model" value="fast"><span>Fast</span><span class="sr">: quicker answers for everyday questions</span></label>
+            </div>
             <span class="composer__gap"></span>
             <button class="ghost" type="button" data-new hidden>New chat</button>
             <button class="btn" type="submit" data-send>Send</button>
@@ -134,7 +178,7 @@
       </div>
 
       <aside class="chat__side" aria-label="Examples and documents">
-        <section class="side">
+        <section class="side" data-report-example>
           <p class="label">Example</p>
           <h2>Analyze a confidential financial report</h2>
           <p class="side__doc">Norrvik Instruments, third-quarter report. An invented company, about two pages. <a class="link" href="/demo/sample-report.txt" target="_blank" rel="noopener">Read it</a></p>
@@ -144,7 +188,36 @@
             <button class="prompt" type="button" data-example="board">Draft a short note to the board</button>
           </div>
         </section>
-        <section class="side">
+        <section class="side" data-invoice-example hidden>
+          <p class="label">Sample invoice</p>
+          <h2>INV-1042</h2>
+          <p class="side__doc">Kestrel Valve &amp; Pump</p>
+          <details class="recording__invoice">
+            <summary class="link">Read invoice</summary>
+            <pre data-invoice-text></pre>
+          </details>
+          <div class="side__prompts">
+            <button class="prompt" type="button" data-example="invoice">Extract the total and PO reference</button>
+            <button class="prompt" type="button" data-example="records" hidden>Identify the records to check</button>
+            <button class="prompt" type="button" data-example="fast-review" hidden>Check invoice against purchasing records <span class="prompt__model">Fast</span></button>
+            <button class="prompt" type="button" data-example="deep-review" hidden>Review before payment <span class="prompt__model">Deep</span></button>
+          </div>
+          <a class="link" data-recording-next hidden></a>
+        </section>
+        <section class="side" data-purchasing-records aria-labelledby="purchasing-records-title" aria-live="polite" hidden>
+          <h2 id="purchasing-records-title">Purchasing records</h2>
+          <dl class="side__records">
+            <div data-purchasing-record="purchase_order">
+              <dt>Purchase order <strong></strong></dt>
+              <dd></dd>
+            </div>
+            <div data-purchasing-record="goods_receipt">
+              <dt>Goods receipt <strong></strong></dt>
+              <dd></dd>
+            </div>
+          </dl>
+        </section>
+        <section class="side" data-attach-panel>
           <p class="label">Your own document</p>
           <p class="side__text">Attach a PDF or text file, then ask about it. PDFs are read here in your browser.</p>
           <input class="sr" type="file" id="attach" accept=".pdf,.txt,.md,.csv,application/pdf,text/plain" data-attach>
