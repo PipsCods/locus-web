@@ -21,8 +21,8 @@ cron */5: sweep Vast instances, tunnels and DNS records named locus-demo-*; admi
 |---|---|
 | `POST /api/demo/request` | `{email, company_website (honeypot), turnstile_token, page}` → `200 {ok:true}` / `400 {ok:false,error}` (also `403` cross-site, `413`, `503` if Turnstile or email is down). Free and disposable mailboxes are refused here already. |
 | `GET /api/demo/confirm?token=…` | Single-use confirmation link (24 h): marks the email confirmed, sets the `locus_demo` cookie (HttpOnly, Secure, SameSite=Lax), starts the checks, redirects to `/demo`. A used or bad link redirects to `/demo?link=used` / `/demo?link=invalid`. The same route accepts the "ready" email's access link, which may be used repeatedly until the window ends (for opening the demo on another device). |
-| `GET /api/demo/status` | `{ok, status, step?, eta_minutes?, ends_at?, hardware?: {cpu, ram_gb, gpu}, model?, models?: [{id, label}]}`; no cookie → `none`. `models` is only there when `status` is `ready` and `CHAT_MODELS` is set. |
-| `POST /api/demo/chat` | `{messages, thinking, model?}` → llama-server SSE passed through unchanged. Adds the machine's API key, sets `chat_template_kwargs.enable_thinking` from `thinking`, caps `max_tokens` (`CHAT_MAX_TOKENS`) and body size (`CHAT_MAX_BODY_BYTES`). With `CHAT_MODELS` set, `model` must be one of its ids (else `400 Bad request: model.`) and is forwarded as `model`; left out, nothing is forwarded and the box uses its default. Without `CHAT_MODELS`, `model` is ignored. Errors `401`, `409`, `413`, `502`, `400`. |
+| `GET /api/demo/status` | `{ok, status, step?, eta_minutes?, ends_at?, hardware?: {cpu, ram_gb, gpu}, model?, models?: [{id, label}], invoice_review?}`. With no cookie, status is `none`. Ready status includes `models` when `CHAT_MODELS` is set and `invoice_review: true` when the local manual MCP integration is enabled. |
+| `POST /api/demo/chat` | `{messages, thinking, model?, invoice_review?}` → llama-server SSE. Adds the machine's API key, sets `chat_template_kwargs.enable_thinking` from `thinking`, caps `max_tokens` (`CHAT_MAX_TOKENS`) and body size (`CHAT_MAX_BODY_BYTES`). With `CHAT_MODELS` set, the optional `model` must be one of its ids. Otherwise the machine uses its default. With `invoice_review: true`, the local manual session runs the sample invoice review on `fast` and sends an `invoice_sources` event before the completion stream. Errors `400`, `401`, `403`, `409`, `413`, `502`. |
 | `GET /api/demo/decide?token=…&action=approve\|reject` | Owner's one-click links from the review email (single use, 3 days). Approving still goes through the caps. |
 | `GET /api/demo/manual?key=…` | Phase 2 manual mode, see below. |
 
@@ -106,6 +106,7 @@ export const onRequest = ({ request, env }) => env.DEMO.fetch(request);
 | `CF_API_TOKEN` | per-demo tunnels and DNS records |
 | `MANUAL_UPSTREAM_KEY` | manual mode only: the hand-started llama-server's `--api-key` |
 | `MANUAL_ACCESS_KEY` | manual mode only: ≥ 16 characters, the secret in the access link |
+| `MANUAL_INVOICE_MCP_URL` | optional loopback HTTP URL for the read-only purchasing fixture in local manual mode |
 
 ### Vars (`wrangler.jsonc`)
 

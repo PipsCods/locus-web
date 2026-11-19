@@ -26,9 +26,9 @@ leave headroom.
 six minutes on the simulated download, close to the measured 352 seconds
 for both model files. Capture the reservation, then cut ahead to the same
 session when **Open chat** appears. For the two-GPU setup, use the
-invoice example and the Fast and Deep picker in that chat. Then select
-**Open Invoice Review preview** to see the same invoice in the finance
-interface. Ask the prefilled question and open the source records.
+invoice example and the Fast and Deep picker in that chat. Select **Check
+invoice against purchasing records** to show the discrepancy in the chat
+and the purchase order and goods receipt in the sidebar.
 
 The **AMD EPYC 9004 / 9005** option demonstrates an unavailable offer. Use a fresh browser
 session with `&scenario=failed-start` to test a reservation error. Reload
@@ -61,8 +61,8 @@ interface and sample responses are served by Vite in development.
 
 **After the cut, open chat**
 
-> Both models are ready. I’ll use this server to review a supplier invoice,
-> then show how the finance app connects to it.
+> Both models are ready. I’ll check the sample invoice against the purchase
+> order and goods receipt. The records appear here on the right.
 
 ## Local booking path
 
@@ -112,7 +112,7 @@ confirm the previous rental is gone in `vastai show instances` and remove
 its recording tunnel and DNS record. Destroy the instance with
 `vastai destroy instance <id> -y` as soon as the segment is captured.
 
-## Two-model rehearsal and Open WebUI
+## Two-model rehearsal in locus chat
 
 Prefer 2× RTX 3090 on a DDR5 host. The EPYC 7742 DDR4 fallback requires at
 least 128 GB of RAM and PCIe 4.0. Show the rental’s actual hardware. Use the
@@ -132,11 +132,21 @@ In the recording Worker set `SERVERS="DEEP FAST"`, each model alias,
 `ROUTER_POLICY=fast-only`, `ROUTER_DEFAULT=fast`, and `ROUTER_JUDGE=none`.
 Arm `RECORDING_EXPIRES_AT` and the approved two-GPU offer, then reserve the
 `11–40 users` setup through the picker. The booking and chat use the same
-session. Connect Open WebUI to that rental’s router for the second clip.
+session. To use the purchasing sidebar with an existing rental in local
+manual mode, add a `fast` entry to `CHAT_MODELS` and set
+`MANUAL_INVOICE_MCP_URL=http://127.0.0.1:8765/mcp` in the local Worker vars.
+The live review uses Fast’s native tool call and shows the returned source
+records alongside its answer.
 
 Run the purchase-order MCP fixture with `uv run demo/recording/purchase_orders.py`
 from the repo root. It exposes one read-only tool at
-`http://127.0.0.1:8765/mcp`. Run Open WebUI on the same private network with
+`http://127.0.0.1:8765/mcp`. In the locus chat sidebar, click **Check invoice
+against purchasing records**. Keep both source records and the $900
+discrepancy visible in the capture.
+
+### Open WebUI integration
+
+Run Open WebUI on the same private network with
 access to the MCP endpoint and the tiered router. For a containerized Open
 WebUI, ensure the tool endpoint is reachable from the container through its
 private network or host networking.

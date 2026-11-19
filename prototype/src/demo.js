@@ -4,7 +4,7 @@
 // developing, vite.config.js stands in for it.
 
 import { cleanLead } from "../shared/lead.js";
-import { EXTRACT_INVOICE, CHECK_RECORDS, invoiceText } from "../shared/invoice.js";
+import { EXTRACT_INVOICE, CHECK_RECORDS, MATCH_INVOICE, invoiceText, usd } from "../shared/invoice.js";
 import { bindRecording, loadRecording } from "./recording.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -275,11 +275,12 @@ async function ready(st) {
     $("[data-invoice-text]").textContent = invoiceText;
     $("[data-example=invoice]").hidden = recordingView === "tiered";
     $("[data-example=records]").hidden = tiers.length < 2;
+    $("[data-example=review]").hidden = !st.invoice_review;
     $("[data-empty] p").textContent = "Start with the sample invoice.";
     const next = $("[data-recording-next]");
-    next.hidden = st.recording !== "preview";
-    next.href = tiers.length > 1 ? "/recording/finance" : "/demo?recording=tiered";
-    next.textContent = tiers.length > 1 ? "Open Invoice Review preview" : "Try the two-model server";
+    next.hidden = st.recording !== "preview" || tiers.length > 1;
+    next.href = "/demo?recording=tiered";
+    next.textContent = "Try the two-model server";
   }
   if (!chat.started) { chat.started = true; show("chat"); }
 }
@@ -435,9 +436,9 @@ function compose(text, doc) {
   return `Here is a document, ${doc.name}:\n\n<document>\n${doc.text}\n</document>\n\n${text}`;
 }
 
-async function send(text, doc) {
+async function send(text, doc, invoiceReview = false) {
   if (chat.busy || chat.over) return;
-  const user = { role: "user", text, doc, content: compose(text, doc) };
+  const user = { role: "user", text, doc, invoiceReview, content: compose(text, doc) };
   chat.msgs.push(user);
   addMessage(user);
   await answer();
@@ -450,6 +451,8 @@ async function answer() {
   // with a picker, the stream names the model that answered (Auto may choose either)
   const m = { role: "assistant", content: "", reasoning: "", started: Date.now(), named: !pickEl.hidden };
   const history = chat.msgs.filter((x) => x.role === "user" || x.end !== "error").map(({ role, content }) => ({ role, content }));
+  const invoiceReview = Boolean(chat.msgs.findLast(({ role }) => role === "user")?.invoiceReview);
+  if (invoiceReview) $("[data-purchasing-records]").hidden = true;
   chat.msgs.push(m);
   addMessage(m);
   pinned = true;
@@ -462,15 +465,16 @@ async function answer() {
     const res = await fetch("/api/demo/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: history, thinking: thinkEl.checked, model: pickedModel() }),
+      body: JSON.stringify({ messages: history, thinking: thinkEl.checked, model: pickedModel(), ...(invoiceReview ? { invoice_review: true } : {}) }),
       signal: ctrl.signal,
     });
     if (!res.ok || !res.body) {
       const data = await res.json().catch(() => ({}));
-      throw Object.assign(new Error(chatError(res.status, data.error)), { status: res.status });
+      throw Object.assign(new Error(invoiceReview && data.error ? data.error : chatError(res.status, data.error)), { status: res.status });
     }
     for await (const chunk of events(res.body)) {
       if (chunk.error) throw new Error(chunk.error.message || "The model stopped with an error.");
+      if (invoiceReview && chunk.invoice_sources) showInvoiceSources(chunk.invoice_sources);
       const delta = chunk.choices?.[0]?.delta ?? {};
       if (delta.reasoning_content) m.reasoning += delta.reasoning_content;
       if (delta.content) {
@@ -566,6 +570,7 @@ newBtn.addEventListener("click", () => {
   if (chat.busy) return;
   for (const m of chat.msgs) m.el.remove();
   chat.msgs = [];
+  $("[data-purchasing-records]").hidden = true;
   emptyEl.hidden = false;
   syncButtons();
   promptEl.focus();
@@ -573,10 +578,28 @@ newBtn.addEventListener("click", () => {
 
 // ── the example report and the visitor's own documents ──
 
+function showInvoiceSources(sources) {
+  const panel = $("[data-purchasing-records]");
+  for (const row of panel.querySelectorAll("[data-purchasing-record]")) {
+    const record = sources[row.dataset.purchasingRecord];
+    if (!record) return;
+    $("strong", row).textContent = record.id;
+    $("dd", row).textContent = `${record.units} units · ${usd(record.unit_price_usd)} each`;
+  }
+  panel.hidden = false;
+}
+
 let sampleText = null;
 document.querySelector(".chat__side").addEventListener("click", async (ev) => {
   const b = ev.target.closest("[data-example]");
   if (!b || chat.busy || chat.over) return;
+  if (b.dataset.example === "review") {
+    if (!status?.invoice_review) return;
+    const fast = pickInputs.find((input) => input.value === "fast");
+    if (fast) fast.checked = true;
+    const doc = { name: "INV-1042.txt", text: invoiceText, chars: invoiceText.length };
+    return send(MATCH_INVOICE, doc, true);
+  }
   if (b.dataset.example === "invoice" || b.dataset.example === "records") {
     const doc = { name: "INV-1042.txt", text: invoiceText, chars: invoiceText.length };
     return send(b.dataset.example === "invoice" ? EXTRACT_INVOICE : CHECK_RECORDS, doc);

@@ -261,6 +261,10 @@ input.sr:focus-visible + label.ghost { outline: 2px solid var(--ink); outline-of
 .recording__invoice { min-width: 0; max-width: 100%; }
 .recording__invoice pre { margin: 10px 0 0; color: var(--soft); font: 0.8rem/1.6 var(--mono); white-space: pre-wrap; }
 .recording__invoice summary { cursor: pointer; font-size: 0.875rem; }
+.side__records { display: grid; gap: 10px; width: 100%; margin: 0; }
+.side__records div { padding-top: 10px; border-top: 1px solid var(--line); }
+.side__records dt { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; font-size: 0.875rem; }
+.side__records dd { margin: 4px 0 0; color: var(--soft); font-size: 0.875rem; }
 [data-recording-next] { margin-top: 8px; }
 
 @media (max-width: 760px) {

@@ -12,7 +12,8 @@
 // Status "unreachable" answers 503, like the site with no Worker bound.
 
 import { cleanLead } from "../shared/lead.js";
-import { recordingAnswer, recordingApi, recordingStatus } from "./recording-api.js";
+import { previewInvoiceReview, recordingAnswer, recordingApi, recordingStatus } from "./recording-api.js";
+import { invoice, usd } from "../shared/invoice.js";
 
 const STATUSES = ["none", "checking", "review", "queued", "booting", "ready", "rejected", "failed", "ended", "unreachable"];
 const COOKIE = "locus_demo_dev";
@@ -176,12 +177,19 @@ async function chat(req, res) {
     return send(res, 400, { ok: false, error: "Bad request: model." });
   }
 
+  if (body.invoice_review === true && !recording?.invoice_review) {
+    return send(res, 403, { ok: false, error: "Invoice review is unavailable for this session." });
+  }
+  const review = body.invoice_review === true ? previewInvoiceReview() : null;
   const last = String(body.messages.at(-1)?.content ?? "");
   const kind = topic(last.split("</document>").at(-1));
   const think = body.thinking ? pieces(THOUGHTS[kind]) : [];
   // "echo: <text>" streams the text back as the answer: handy to check what the page does with hostile markdown
   const echo = /^echo:\s?([\s\S]*)$/.exec(last)?.[1];
-  const words = pieces(echo ?? recordingAnswer(recording, last) ?? ANSWERS[kind]);
+  const answer = review
+    ? `The invoice bills for ${invoice.units} units. ${review.source.purchase_order.id} and ${review.source.goods_receipt.id} both show ${review.source.goods_receipt.units} units. The extra ${review.excess} units at ${usd(invoice.unitPrice)} each are a **${usd(review.discrepancy)} discrepancy**.`
+    : echo ?? recordingAnswer(recording, last) ?? ANSWERS[kind];
+  const words = pieces(answer);
   const promptN = Math.round(body.messages.reduce((n, m) => n + String(m.content ?? "").length, 0) / 3.8);
   const speed = 38 + Math.random() * 8; // tokens a second, about what the benchmark aims for
 
@@ -199,6 +207,7 @@ async function chat(req, res) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   await sleep(350 + promptN / 6); // reading the prompt
+  if (review) chunk({}, { invoice_sources: review.source });
   chunk({ role: "assistant", content: null });
   const t0 = Date.now();
   for (const w of think) { if (closed) return; chunk({ reasoning_content: w }); await sleep(1000 / speed); }

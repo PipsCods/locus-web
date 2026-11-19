@@ -125,6 +125,7 @@ export function config(env) {
           url: str(env.MANUAL_UPSTREAM_URL).replace(/\/$/, ""),
           key: str(env.MANUAL_UPSTREAM_KEY),
           accessKey: str(env.MANUAL_ACCESS_KEY),
+          invoiceMcpUrl: str(env.MANUAL_INVOICE_MCP_URL),
           endsAt: str(env.MANUAL_ENDS_AT),
           cpu: str(env.MANUAL_HW_CPU),
           ramGb: num(env.MANUAL_HW_RAM_GB, 0),

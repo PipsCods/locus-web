@@ -9,6 +9,7 @@ import { publicStatus } from "./status.js";
 import { recordingModels, setupForUsers } from "../../../prototype/shared/recording.js";
 import { confirmEmail } from "./emails.js";
 import { startScreening, admit } from "./pipeline.js";
+import { localInvoiceMcp, reviewInvoice } from "./invoice-review.js";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/; // same rule as prototype/shared/lead.js
 const DOMAIN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
@@ -112,7 +113,7 @@ export async function status(request, deps) {
   const s = await session(request, deps);
   const recording = deps.cfg.recording ? { recording: deps.cfg.devFakes ? "preview" : "private" } : {};
   if (!s) return json({ ok: true, status: "none", ...recording });
-  if (s.manual && !deps.cfg.recording) return json(manualStatus(deps));
+  if (s.manual && !deps.cfg.recording) return json(manualStatus(request, deps));
   const row = s.demoId && await getDemo(deps.db, s.demoId);
   const demo = sessionRow(row, deps.cfg);
   const model = setupForUsers(demo?.recording_profile ? demo.recording_users : null)?.model ?? deps.cfg.modelLabel;
@@ -131,7 +132,7 @@ function sessionRow(row, cfg) {
   return row && Boolean(row.recording_profile) === Boolean(cfg.recording) ? row : null;
 }
 
-function manualStatus(deps) {
+function manualStatus(request, deps) {
   const m = deps.cfg.manual;
   if (!m) return { ok: true, status: "none" };
   const endsAt = m.endsAt && !Number.isNaN(Date.parse(m.endsAt)) ? new Date(m.endsAt).toISOString() : null;
@@ -142,6 +143,7 @@ function manualStatus(deps) {
     ...(endsAt ? { ends_at: endsAt } : {}),
     hardware: { cpu: m.cpu, ram_gb: m.ramGb, gpu: m.gpu },
     model: m.model,
+    ...(localInvoiceMcp(request, deps.cfg) ? { invoice_review: true } : {}),
   }, deps.cfg.chatModels);
 }
 
@@ -150,9 +152,9 @@ async function upstreamFor(request, deps) {
   const s = await session(request, deps);
   if (!s) return { error: fail(401, "Your demo session has expired. Please use the link from your email.") };
   if (s.manual && !deps.cfg.recording) {
-    const st = manualStatus(deps);
+    const st = manualStatus(request, deps);
     if (st.status !== "ready") return { error: fail(409, "This demo has ended.") };
-    return { url: deps.cfg.manual.url, key: deps.cfg.manual.key, models: deps.cfg.chatModels };
+    return { url: deps.cfg.manual.url, key: deps.cfg.manual.key, models: deps.cfg.chatModels, invoiceMcp: localInvoiceMcp(request, deps.cfg) };
   }
   const row = s.demoId && await getDemo(deps.db, s.demoId);
   const demo = sessionRow(row, deps.cfg);
@@ -176,6 +178,7 @@ export async function chat(request, deps) {
   for (const m of messages) {
     if (!m || !["system", "user", "assistant"].includes(m.role) || typeof m.content !== "string") return fail(400, "Bad request: messages.");
   }
+  if (body.invoice_review === true) return reviewInvoice(request, deps, up);
   // a tiered box takes a model pick; a single-model box ignores the field
   const { models } = up;
   const model = models.length && body.model !== undefined && body.model !== null ? body.model : undefined;

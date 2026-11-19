@@ -16,7 +16,7 @@ function previewId(req) {
 
 export function recordingStatus(req, page) {
   if (page.get("recording") === "tiered") return {
-    ok: true, status: "ready", ...mode, models: RECORDING_MODELS, model: "Two models",
+    ok: true, status: "ready", ...mode, models: RECORDING_MODELS, invoice_review: true, model: "Two models",
     hardware: { cpu: "2× AMD EPYC 7642", ram_gb: 367, gpu: "2× RTX 3090" },
   };
   if (page.get("recording") !== "1") return null;
@@ -32,7 +32,7 @@ export function recordingStatus(req, page) {
     eta_minutes: (READY_AT - elapsed) / 60_000,
     ...(elapsed >= DOWNLOAD_AT ? { hardware } : {}),
   };
-  return { ok: true, status: "ready", ...mode, hardware, model, ...(models.length ? { models } : {}) };
+  return { ok: true, status: "ready", ...mode, hardware, model, ...(models.length ? { models, invoice_review: true } : {}) };
 }
 
 export async function recordingApi(path, req, res, page, send, readBody) {
@@ -46,9 +46,7 @@ export async function recordingApi(path, req, res, page, send, readBody) {
     if (!body || typeof body.prompt !== "string" || !body.prompt.includes(invoice.id) || !body.prompt.includes(invoice.purchaseOrder)) {
       return send(res, 400, { ok: false, error: "Ask about invoice INV-1042 and PO-1842." });
     }
-    const source = purchaseOrder;
-    const excess = invoice.units - source.goods_receipt.units;
-    return send(res, 200, { ok: true, source, excess, discrepancy: excess * invoice.unitPrice });
+    return send(res, 200, { ok: true, ...previewInvoiceReview() });
   }
   if (path !== "/recording/recommendation" && path !== "/recording/start") return send(res, 404, { ok: false, error: "Not found." });
   const key = process.env.RECORDING_ACCESS_KEY;
@@ -94,4 +92,10 @@ export function recordingAnswer(st, last) {
     return `Invoice **${invoice.id}** lists a total of **${usd(invoice.units * invoice.unitPrice)} USD** and references purchase order **${invoice.purchaseOrder}**.`;
   }
   return `Load the sample invoice ${invoice.id} to continue the local walkthrough.`;
+}
+
+export function previewInvoiceReview() {
+  const source = purchaseOrder;
+  const excess = invoice.units - source.goods_receipt.units;
+  return { source, excess, discrepancy: excess * invoice.unitPrice };
 }

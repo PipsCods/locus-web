@@ -199,8 +199,22 @@
           <div class="side__prompts">
             <button class="prompt" type="button" data-example="invoice">Extract the total and PO reference</button>
             <button class="prompt" type="button" data-example="records" hidden>Identify the records to check</button>
+            <button class="prompt" type="button" data-example="review" hidden>Check invoice against purchasing records</button>
           </div>
           <a class="link" data-recording-next hidden></a>
+        </section>
+        <section class="side" data-purchasing-records aria-labelledby="purchasing-records-title" aria-live="polite" hidden>
+          <h2 id="purchasing-records-title">Purchasing records</h2>
+          <dl class="side__records">
+            <div data-purchasing-record="purchase_order">
+              <dt>Purchase order <strong></strong></dt>
+              <dd></dd>
+            </div>
+            <div data-purchasing-record="goods_receipt">
+              <dt>Goods receipt <strong></strong></dt>
+              <dd></dd>
+            </div>
+          </dl>
         </section>
         <section class="side" data-attach-panel>
           <p class="label">Your own document</p>
