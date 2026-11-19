@@ -236,6 +236,10 @@ input.sr:focus-visible + label.ghost { outline: 2px solid var(--ink); outline-of
 .recording__form { display: grid; gap: 20px; }
 .recording__choices { display: flex; flex-wrap: wrap; gap: 10px; }
 .recording__choices .opt { flex: 1 1 200px; }
+.recording__choices[data-recording-profiles] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 165px), 1fr));
+}
 .recording__choices input:checked + .opt__body { border-color: var(--ink); background: var(--forest); }
 .recording__key { margin-top: 0; }
 .recording__form .field__error { margin-top: 0; }

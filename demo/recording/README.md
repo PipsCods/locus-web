@@ -16,10 +16,11 @@ Choose a fresh password-manager key of 16–256 characters. Run this from
 Open [`/demo?recording=1`](http://127.0.0.1:5173/demo?recording=1).
 Select **AMD EPYC 7742** and **1–10 users**, enter your
 key, and select **See recommendation** to show Flash-Next on one RTX 3090.
-Switch to **11–80 users** and select **See recommendation** again for
+Switch to **11–40 users** and select **See recommendation** again for
 two RTX 3090s with Flash-Next and 27B. The ranges show total users. The
 picker assumes 10% are active together and sizes for the upper end of each
-range, mapping to the benchmark loads of 1 and 8 active users.
+range. The larger setup uses the four-active-user benchmark point to
+leave headroom.
 
 **Reserve demo server** starts the selected setup. The preview spends about
 six minutes on the simulated download, close to the measured 352 seconds
@@ -47,9 +48,9 @@ interface and sample responses are served by Vite in development.
 > I’ll start with a small team of up to ten users. For that setup,
 > locus recommends one RTX 3090 and Qwen3.8-Flash-Next.
 
-**Switch to 11–80 users and show the new recommendation**
+**Switch to 11–40 users and show the new recommendation**
 
-> Now let’s say more teams want to use it, so I’ll select the eleven-to-eighty
+> Now let’s say more teams want to use it, so I’ll select the eleven-to-forty
 > range. locus recommends two RTX 3090s, with Qwen3.8-27B for routine work
 > and Flash-Next for deeper review.
 
@@ -130,7 +131,7 @@ pinning for the booked host before starting it.
 In the recording Worker set `SERVERS="DEEP FAST"`, each model alias,
 `ROUTER_POLICY=fast-only`, `ROUTER_DEFAULT=fast`, and `ROUTER_JUDGE=none`.
 Arm `RECORDING_EXPIRES_AT` and the approved two-GPU offer, then reserve the
-`11–80 users` setup through the picker. The booking and chat use the same
+`11–40 users` setup through the picker. The booking and chat use the same
 session. Connect Open WebUI to that rental’s router for the second clip.
 
 Run the purchase-order MCP fixture with `uv run demo/recording/purchase_orders.py`
