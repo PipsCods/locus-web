@@ -4,11 +4,11 @@ import { fail, json, readJson, sessionCookie } from "./http.js";
 import { offerQuery } from "./offers.js";
 import { sign } from "./tokens.js";
 
-const CPU = {
-  threadripper: /\bThreadripper\s+PRO\s+9995WX\b/i,
-  epyc: /\bEPYC\s+9[0-9A-Z]{2}[45][A-Z]?\b/i,
+const HOST_REQUIREMENTS = {
+  threadripper: { cpu: /\bThreadripper\s+PRO\s+9995WX\b/i, ramGb: 256 },
+  epyc: { cpu: /\bEPYC\s+9[0-9A-Z]{2}[45][A-Z]?\b/i, ramGb: 256 },
+  "epyc-7742": { cpu: /\bEPYC\s+7742\b/i, ramGb: 128, pciGen: 4 },
 };
-const MIN_RAM_MB = 256_000;
 const MIN = 60_000;
 
 export const isLoopback = (url) => ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
@@ -64,14 +64,15 @@ function runtimeConfigured(cfg, gpuCount) {
 }
 
 export async function recordingOffer(deps, profile, gpuCount, deadline, offerId = deps.cfg.recording.offerId) {
-  const cpu = Object.hasOwn(CPU, profile) && CPU[profile];
   const { cfg, vast } = deps;
-  if (!cpu || !runtimeConfigured(cfg, gpuCount)) return null;
+  if (!Object.hasOwn(HOST_REQUIREMENTS, profile) || !runtimeConfigured(cfg, gpuCount)) return null;
+  const { cpu, ramGb, pciGen } = HOST_REQUIREMENTS[profile];
   const maxDph = Math.min(cfg.vastMaxDph, cfg.recording.maxDph);
   const query = {
-    ...offerQuery({ ...cfg, vastNumGpus: gpuCount, vastGpuName: "RTX 3090", vastRamTiersGb: [256], vastMaxDph: maxDph }),
+    ...offerQuery({ ...cfg, vastNumGpus: gpuCount, vastGpuName: "RTX 3090", vastRamTiersGb: [ramGb], vastMaxDph: maxDph }),
     type: "on-demand",
     ...(offerId ? { id: { eq: offerId } } : {}),
+    ...(pciGen ? { pci_gen: { gte: pciGen } } : {}),
     allocated_storage: cfg.vastDiskGb,
     cuda_max_good: { gte: 13.0 },
     duration: { gte: Math.ceil((deadline - deps.now()) / 1000) },
@@ -80,7 +81,8 @@ export async function recordingOffer(deps, profile, gpuCount, deadline, offerId 
   return offers.filter((o) => o && Number.isSafeInteger(o.id) && (!offerId || o.id === offerId) && o.num_gpus === gpuCount &&
     /^RTX[ _]3090$/.test(o.gpu_name) && (o.verification === "verified" || o.verified === true) &&
     o.rentable === true && o.rented === false &&
-    Number(o.cpu_ram) >= MIN_RAM_MB && cpu.test(o.cpu_name) && Number(o.cuda_max_good) >= 13 &&
+    Number(o.cpu_ram) >= ramGb * 1000 && cpu.test(o.cpu_name) && Number(o.cuda_max_good) >= 13 &&
+    (!pciGen || Number(o.pci_gen) >= pciGen) &&
     Number(o.reliability) > cfg.vastMinReliability && Number(o.inet_down) >= cfg.vastMinInetDown &&
     Number(o.disk_space) >= cfg.vastDiskGb && Number(o.end_date) * 1000 >= deadline &&
     Number(o.dph_total) > 0 && Number(o.dph_total) <= maxDph)

@@ -23,7 +23,7 @@ export function recordingStatus(req, page) {
   const take = previews.get(previewId(req));
   if (!take) return { ok: true, status: "none", ...mode };
   const { gpu, model } = take.setup;
-  const hardware = { cpu: "AMD Threadripper PRO 9995WX", ram_gb: 256, gpu };
+  const hardware = { cpu: take.profile.name, ram_gb: take.profile.ramGb, gpu };
   const models = recordingModels(take.setup.id);
   const elapsed = Date.now() - take.started;
   if (elapsed < READY_AT) return {
@@ -60,10 +60,11 @@ export async function recordingApi(path, req, res, page, send, readBody) {
     return send(res, 401, { ok: false, error: "The validation key is incorrect." });
   }
   const setup = setupForUsers(body.users);
-  if (!PROFILES.some(({ id }) => id === body.profile) || !setup) {
+  const profile = PROFILES.find(({ id }) => id === body.profile);
+  if (!profile || !setup) {
     return send(res, 400, { ok: false, error: "Choose a server and number of users." });
   }
-  const available = body.profile === "threadripper" && page.get("scenario") !== "unavailable";
+  const available = profile.id !== "epyc" && page.get("scenario") !== "unavailable";
   if (path === "/recording/recommendation") {
     return send(res, 200, { ok: true, recommendation: { gpu: setup.gpu, model: setup.model }, available });
   }
@@ -71,7 +72,7 @@ export async function recordingApi(path, req, res, page, send, readBody) {
   if (!id) return send(res, 400, { ok: false, error: "Reload the picker and try again." });
   const existing = previews.get(id);
   if (existing) {
-    if (existing.setup !== setup || existing.profile !== body.profile) {
+    if (existing.setup !== setup || existing.profile !== profile) {
       return send(res, 409, { ok: false, error: "This take already has a server setup." });
     }
     return send(res, 200, { ok: true, session: id });
@@ -80,7 +81,7 @@ export async function recordingApi(path, req, res, page, send, readBody) {
   if (page.get("scenario") === "failed-start") {
     return send(res, 503, { ok: false, error: "The reservation could not start. Please try again." });
   }
-  previews.set(id, { started: Date.now(), setup, profile: body.profile });
+  previews.set(id, { started: Date.now(), setup, profile });
   return send(res, 200, { ok: true, session: id });
 }
 

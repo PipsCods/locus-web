@@ -136,6 +136,9 @@ export const RECORDING_OFFER = {
 };
 
 export const RECORDING_TIERED_OFFER = { ...RECORDING_OFFER, id: 4, machine_id: 44, num_gpus: 2, dph_total: 0.85 };
+export const RECORDING_EPYC_OFFER = {
+  ...RECORDING_TIERED_OFFER, id: 5, machine_id: 55, cpu_name: "AMD EPYC 7742 64-Core Processor", cpu_ram: 241_675, pci_gen: 4,
+};
 
 let devState; // survives between requests inside one `wrangler dev` isolate
 export function devFakes(cfg) {
@@ -146,7 +149,7 @@ export function devFakes(cfg) {
       turnstile: fakeTurnstile(),
       email: fakeEmail(),
       openai: fakeOpenAI(),
-      vast: fakeVast(cfg.recording ? { offers: [RECORDING_OFFER, RECORDING_TIERED_OFFER] } : {}),
+      vast: fakeVast(cfg.recording ? { offers: [RECORDING_OFFER, RECORDING_TIERED_OFFER, RECORDING_EPYC_OFFER] } : {}),
       cf: fakeCloudflare(),
     };
   }

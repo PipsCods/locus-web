@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDemo } from "../src/db.js";
-import { RECORDING_OFFER, RECORDING_TIERED_OFFER, fakeVast } from "../src/fakes.js";
+import { RECORDING_EPYC_OFFER, RECORDING_OFFER, RECORDING_TIERED_OFFER, fakeVast } from "../src/fakes.js";
 import { handle } from "../src/index.js";
 import { provision, rentStep, tunnelStep } from "../src/provision.js";
 import { runSweep } from "../src/sweep.js";
@@ -93,13 +93,18 @@ describe("private recording", () => {
     expect(deps.email.sent).toHaveLength(0);
   });
 
-  it("reserves the eight-user setup and keeps both models on that session", async () => {
+  it("reserves the PCIe 4.0 EPYC fallback and keeps both models on that session", async () => {
     const { deps, clock, llama } = fixture({
-      RECORDING_OFFER_ID: "4", RECORDING_MAX_DPH: "1",
+      RECORDING_OFFER_ID: "5", RECORDING_MAX_DPH: "1",
       SERVERS: "DEEP FAST", DEEP_REPO: "unsloth/Qwen3.8-Flash-Next-GGUF", FAST_REPO: "unsloth/Qwen3.8-27B-GGUF",
-    }, [RECORDING_OFFER, RECORDING_TIERED_OFFER]);
-    const larger = { ...payload, users: "8" };
-    expect(await (await call(deps, "/recording/recommendation", payload)).json()).toMatchObject({
+    }, [RECORDING_OFFER, RECORDING_TIERED_OFFER, RECORDING_EPYC_OFFER]);
+    const smaller = { ...payload, profile: "epyc-7742" };
+    const larger = { ...smaller, users: "8" };
+    const search = deps.vast.searchOffers;
+    deps.vast.searchOffers = async () => [{ ...RECORDING_EPYC_OFFER, pci_gen: 3 }];
+    expect((await start(deps, larger)).status).toBe(409);
+    deps.vast.searchOffers = search;
+    expect(await (await call(deps, "/recording/recommendation", smaller)).json()).toMatchObject({
       available: false, recommendation: { gpu: "1× RTX 3090" },
     });
     expect(await (await call(deps, "/recording/recommendation", larger)).json()).toMatchObject({
@@ -107,7 +112,7 @@ describe("private recording", () => {
     });
     const response = await start(deps, larger);
     const { session: id } = await response.json();
-    expect((await start(deps)).status).toBe(409);
+    expect((await start(deps, smaller)).status).toBe(409);
     expect((await getDemo(deps.db, id)).recording_users).toBe(8);
 
     const cookie = cookieFrom(response);
@@ -116,7 +121,7 @@ describe("private recording", () => {
     step.sleep = async (name, ms) => {
       if (name === "window") {
         expect(await status(deps, cookie)).toMatchObject({
-          status: "ready", hardware: { gpu: "2× RTX 3090" },
+          status: "ready", hardware: { cpu: RECORDING_EPYC_OFFER.cpu_name, gpu: "2× RTX 3090" },
           models: [{ id: "fast", label: "Qwen3.8-27B" }, { id: "deep", label: "Qwen3.8-Flash-Next" }],
         });
         const chat = await call(deps, "/chat", {
@@ -130,7 +135,7 @@ describe("private recording", () => {
     };
     expect(await provision(deps, id, step)).toBe("ended");
     expect(deps.vast.state.created).toHaveLength(1);
-    expect(deps.vast.state.created[0].offerId).toBe(4);
+    expect(deps.vast.state.created[0].offerId).toBe(5);
     expect(deps.vast.state.created[0].spec.env).toContain('SERVERS="DEEP FAST"');
   });
 

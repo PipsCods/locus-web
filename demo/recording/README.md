@@ -14,7 +14,7 @@ Choose a fresh password-manager key of 16–256 characters. Run this from
 ```
 
 Open [`/demo?recording=1`](http://127.0.0.1:5173/demo?recording=1).
-Select **Threadripper PRO 9995WX** and **1–10 users**, enter your
+Select **AMD EPYC 7742** and **1–10 users**, enter your
 key, and select **See recommendation** to show Flash-Next on one RTX 3090.
 Switch to **11–80 users** and select **See recommendation** again for
 two RTX 3090s with Flash-Next and 27B. The ranges show total users. The
@@ -29,7 +29,7 @@ invoice example and the Fast and Deep picker in that chat. Then select
 **Open Invoice Review preview** to see the same invoice in the finance
 interface. Ask the prefilled question and open the source records.
 
-The EPYC option demonstrates an unavailable offer. Use a fresh browser
+The **AMD EPYC 9004 / 9005** option demonstrates an unavailable offer. Use a fresh browser
 session with `&scenario=failed-start` to test a reservation error. Reload
 during progress to resume the same preview reservation. The finance
 interface and sample responses are served by Vite in development.
@@ -82,9 +82,9 @@ offer and a spend ceiling before arming the take.
 Keep values in an ignored `.dev.vars.recording`. For a local fake Workflow
 smoke test, start from `demo/worker/dev.vars.example`, leave `DEV_FAKES=1`,
 and add the recording settings with a future deadline and a maximum hourly
-price of at least `0.85` to see both simulated offers. Set `RECORDING_ACCESS_KEY` to your private key.
+price of at least `0.85` to see the simulated offers. Set `RECORDING_ACCESS_KEY` to your private key.
 To test the sweep, set `VAST_API_KEY=local-fake`. The fake catalog has one- and
-two-GPU Threadripper offers.
+two-GPU Threadripper offers and a two-GPU EPYC 7742 offer.
 
 ```sh
 # demo/worker/
@@ -113,8 +113,8 @@ its recording tunnel and DNS record. Destroy the instance with
 
 ## Two-model rehearsal and Open WebUI
 
-Prefer 2× RTX 3090 on a DDR5 host. If using the rehearsed EPYC 7642 host,
-show the rental’s actual hardware. Use the
+Prefer 2× RTX 3090 on a DDR5 host. The EPYC 7742 DDR4 fallback requires at
+least 128 GB of RAM and PCIe 4.0. Show the rental’s actual hardware. Use the
 [tiered machine settings](../instance/README.md#demo-machine-env-contract)
 with these overrides from the rehearsal. Confirm shard paths and CPU
 pinning for the booked host before starting it.
