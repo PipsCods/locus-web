@@ -117,6 +117,7 @@ nohup /opt/locus/onstart.sh >>/var/log/locus-onstart.log 2>&1 &
 | `DEMO_TTL_SECONDS` | yes | hard lifetime from container start; then the instance destroys itself |
 | `CONTAINER_ID`, `CONTAINER_API_KEY` | injected by Vast | used by the self-destruct timer |
 | `HF_TOKEN`, `MODELS_DIR`, `STARTUP_TIMEOUT`, `DESTROY_ON_FAILURE` | no | see the header of `onstart.sh` |
+| `LOCUS_DRY_RUN` | no | `1`: check the variables, print the server command one word per line and exit (no timer, tunnel, download or server). For testing on any machine |
 
 Server defaults: `127.0.0.1:8080 -ngl 999 -np 1 --jinja`, plus `--defer-ple`
 for ik (and `GGML_CUDA_NO_PINNED=1` from the wrapper) or

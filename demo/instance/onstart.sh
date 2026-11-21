@@ -26,6 +26,9 @@
 #   For local testing: LOCUS_ALLOW_NO_SELF_DESTRUCT=1 (no Vast variables),
 #   LOCUS_CONTAINER_START (epoch to count the TTL from), LOCUS_STATE_DIR,
 #   LOCUS_RUN_DIR. Logs and status go to $LOCUS_STATE_DIR (/var/lib/locus).
+#   LOCUS_DRY_RUN=1 checks the variables, prints the server command (one
+#   word per line) and exits: no timer, tunnel, download or server, and the
+#   Vast variables and runtime binaries are not required.
 #
 # Server defaults: 127.0.0.1:8080, -ngl 999 -np 1 --jinja, plus
 #   ik:       --defer-ple (GGML_CUDA_NO_PINNED=1 via the wrapper)
@@ -140,6 +143,7 @@ fail() {
 # Checks
 # ---------------------------------------------------------------------------
 
+DRY_RUN=${LOCUS_DRY_RUN:-0}
 mkdir -p "$STATE_DIR" "$RUN_DIR"
 chmod 700 "$RUN_DIR"
 
@@ -147,7 +151,7 @@ missing=()
 for v in MODEL_REPO MODEL_FILES RUNTIME LLAMA_API_KEY CF_TUNNEL_TOKEN DEMO_TTL_SECONDS; do
   [[ -n "${!v:-}" ]] || missing+=("$v")
 done
-if [[ "${LOCUS_ALLOW_NO_SELF_DESTRUCT:-0}" != 1 ]]; then
+if [[ "${LOCUS_ALLOW_NO_SELF_DESTRUCT:-0}" != 1 && "$DRY_RUN" != 1 ]]; then
   for v in CONTAINER_ID CONTAINER_API_KEY; do
     [[ -n "${!v:-}" ]] || missing+=("$v")
   done
@@ -158,7 +162,41 @@ case "$RUNTIME" in
   ik|mainline) ;;
   *) status "failed: RUNTIME must be ik or mainline, got '$RUNTIME'"; exit 1 ;;
 esac
-command -v "llama-server-$RUNTIME" >/dev/null || { status "failed: llama-server-$RUNTIME not found"; exit 1; }
+if ! command -v "llama-server-$RUNTIME" >/dev/null; then
+  [[ "$DRY_RUN" == 1 ]] || { status "failed: llama-server-$RUNTIME not found"; exit 1; }
+  log "dry run: llama-server-$RUNTIME not found (ignored)"
+fi
+
+# Split LLAMA_ARGS into words without eval: xargs honours single and double
+# quotes (no backslash escapes inside quotes), so pass JSON in single quotes:
+#   LLAMA_ARGS="-ncmoe 14 --chat-template-kwargs '{\"reasoning_effort\":\"low\"}'"
+extra_args=()
+if [[ -n "${LLAMA_ARGS:-}" ]]; then
+  split=$(xargs -n1 printf '%s\n' <<<"$LLAMA_ARGS" 2>&1) || { status "failed: cannot parse LLAMA_ARGS: $split"; exit 1; }
+  mapfile -t extra_args <<<"$split"
+fi
+
+read -r -a files <<<"$MODEL_FILES"
+model=""
+for f in "${files[@]}"; do
+  if [[ "$f" == *-00001-of-*.gguf ]]; then model=$MODELS_DIR/$f; break; fi
+done
+model=${model:-$MODELS_DIR/${files[0]}}
+
+case "$RUNTIME" in
+  ik) runtime_args=(--defer-ple) ;;
+  mainline) runtime_args=(--fit off) ;;
+esac
+server_cmd=("llama-server-$RUNTIME" -m "$model"
+  --host 127.0.0.1 --port "$PORT"
+  --api-key-file "$RUN_DIR/api-key"
+  -ngl 999 -np 1 --jinja
+  "${runtime_args[@]}" "${extra_args[@]}")
+
+if [[ "$DRY_RUN" == 1 ]]; then
+  printf '%s\n' "${server_cmd[@]}"
+  exit 0
+fi
 mkdir -p "$MODELS_DIR" || { status "failed: cannot create $MODELS_DIR"; exit 1; }
 
 if [[ -n "${CONTAINER_ID:-}" && -n "${CONTAINER_API_KEY:-}" ]]; then
@@ -204,7 +242,6 @@ log "cloudflared started (log: $STATE_DIR/cloudflared.log)"
 # Download
 # ---------------------------------------------------------------------------
 
-read -r -a files <<<"$MODEL_FILES"
 status "downloading ${#files[@]} file(s) from $MODEL_REPO"
 t0=$(date +%s)
 ok=0
@@ -222,12 +259,6 @@ for f in "${files[@]}"; do
 done
 log "download done in $(( $(date +%s) - t0 ))s ($(du -sh "$MODELS_DIR" | cut -f1))"
 
-model=""
-for f in "${files[@]}"; do
-  if [[ "$f" == *-00001-of-*.gguf ]]; then model=$MODELS_DIR/$f; break; fi
-done
-model=${model:-$MODELS_DIR/${files[0]}}
-
 # ---------------------------------------------------------------------------
 # Server (supervised)
 # ---------------------------------------------------------------------------
@@ -236,23 +267,6 @@ umask 077
 printf '%s\n' "$LLAMA_API_KEY" >"$RUN_DIR/api-key"
 umask 022
 
-case "$RUNTIME" in
-  ik) runtime_args=(--defer-ple) ;;
-  mainline) runtime_args=(--fit off) ;;
-esac
-# Split LLAMA_ARGS into words without eval: xargs honours single and double
-# quotes (no backslash escapes inside quotes), so pass JSON in single quotes:
-#   LLAMA_ARGS="-ncmoe 14 --chat-template-kwargs '{\"reasoning_effort\":\"low\"}'"
-extra_args=()
-if [[ -n "${LLAMA_ARGS:-}" ]]; then
-  split=$(xargs -n1 printf '%s\n' <<<"$LLAMA_ARGS" 2>&1) || fail "cannot parse LLAMA_ARGS: $split"
-  mapfile -t extra_args <<<"$split"
-fi
-server_cmd=("llama-server-$RUNTIME" -m "$model"
-  --host 127.0.0.1 --port "$PORT"
-  --api-key-file "$RUN_DIR/api-key"
-  -ngl 999 -np 1 --jinja
-  "${runtime_args[@]}" "${extra_args[@]}")
 log "server command: ${server_cmd[*]}"
 
 # start_and_wait -> 0 when /health answers 200, 1 if the process exits or times out.
