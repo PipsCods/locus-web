@@ -71,6 +71,7 @@
 		"VAST_PREFER_CPU": "EPYC,Xeon",
 		"MODEL_REPO": "",
 		"MODEL_FILES": "",
+		// ik | mainline | strata (demo/instance/README.md); anything else is refused before renting
 		"RUNTIME": "ik",
 		"LLAMA_ARGS": "",
 		"MODEL_LABEL": "Qwen3.8-Flash-Next",
