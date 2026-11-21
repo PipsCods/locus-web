@@ -11,7 +11,8 @@
 #   3. check that the Terminal build it installed is this release's.
 # The engine (about 580 MB, per graphics card) is not installed here: the first
 # `strata launch` on the GPU machine fetches it from the same release folder,
-# checks its signature and test-starts it (onstart.sh passes --feed for that).
+# checks its signature and test-starts it. The release folder is written to
+# STRATA_FEED_FILE (/opt/locus/strata-feed) for onstart.sh to pass as --feed.
 #
 # Release v0.2.17 is commit 12d491da4a6904eb49aaa6f2f63ec4b1a17582e3
 # (Terminal / engine build 0.1.63).
@@ -27,6 +28,7 @@ STRATA_VERSION=${STRATA_VERSION:-v0.2.17}
 STRATA_INSTALL_SHA256=${STRATA_INSTALL_SHA256:-9001ad878d0ea63f5a568b5b6feeb47757fed55c3f85f4ad3034dacf03e46545}
 STRATA_TERMINAL_BUILD=${STRATA_TERMINAL_BUILD:-0.1.63}
 STRATA_BIN_DIR=${STRATA_BIN_DIR:-/usr/local/bin}
+STRATA_FEED_FILE=${STRATA_FEED_FILE:-/opt/locus/strata-feed}
 feed="https://github.com/Niko1221/Strata/releases/download/$STRATA_VERSION"
 
 work=$(mktemp -d)
@@ -44,3 +46,8 @@ if [[ "${current##*/}" != "$STRATA_TERMINAL_BUILD" ]]; then
   exit 1
 fi
 "$STRATA_BIN_DIR/strata" --version || true
+
+# onstart.sh passes this to `strata launch --feed`, so the engine comes from
+# the same release and not from Strata's "latest".
+mkdir -p "$(dirname "$STRATA_FEED_FILE")"
+echo "$feed" >"$STRATA_FEED_FILE"
