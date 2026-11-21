@@ -5,7 +5,8 @@ search, the benchmark, and the demo start script.
 
 | File | Runs where | What |
 |---|---|---|
-| `Dockerfile` | build machine | CUDA 13.0 image with ik_llama.cpp and mainline llama.cpp (sm_120), cloudflared, `hf`, `vastai` |
+| `Dockerfile` | build machine | CUDA 13.0 image with ik_llama.cpp and mainline llama.cpp (sm_120), the Strata Terminal, cloudflared, `hf`, `vastai` |
+| `install-strata.sh` | build machine / `setup-on-box.sh` | installs the Strata Terminal from the pinned release (v0.2.17), checksum-checked |
 | `find-offer.sh` | your laptop | ranks 1x RTX 5090 offers, `--create` rents the best |
 | `bench.sh` | rented machine | download + load timing, `-ncmoe`/threads sweep, prefill/generation speed, quality spot check |
 | `onstart.sh` | rented machine | demo start: self-destruct timer, tunnel, download, server |
@@ -28,7 +29,8 @@ Build args: `IK_REF`, `MAINLINE_REF` (commit or tag), `CUDA_VERSION`
 (default 13.0.3, the lowest CUDA that 5090 hosts on Vast report),
 `CUDA_ARCHITECTURES` (120), `IK_CPU_VARIANTS` ("v3 zen4"),
 `CLOUDFLARED_VERSION`/`CLOUDFLARED_SHA256`, `HF_HUB_VERSION`, `VASTAI_VERSION`,
-`BUILD_JOBS`. A private registry works; pass `--login '-u USER -p TOKEN ghcr.io'`
+`BUILD_JOBS`, and `STRATA_VERSION`/`STRATA_INSTALL_SHA256`/`STRATA_TERMINAL_BUILD`
+(empty keeps the pin in `install-strata.sh`). A private registry works; pass `--login '-u USER -p TOKEN ghcr.io'`
 to `find-offer.sh`.
 
 ## Run the benchmark end to end

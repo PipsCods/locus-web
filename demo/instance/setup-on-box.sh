@@ -6,7 +6,8 @@
 # directory:
 #   scp -P <port> -r demo/instance root@<host>:/opt/locus && ssh ... /opt/locus/setup-on-box.sh
 #
-# Keep the pinned refs in step with the Dockerfile's build args.
+# Keep the pinned refs in step with the Dockerfile's build args. Strata's pin is
+# in install-strata.sh, which both use.
 set -euo pipefail
 
 IK_REPO=${IK_REPO:-https://github.com/ikawrakow/ik_llama.cpp}
@@ -74,6 +75,9 @@ find /build/mainline -name '*.so*' -exec cp -P {} /opt/mainline/bin/ \;
 cp /src/mainline/.locus-ref /opt/mainline/REF
 rm -rf /build
 
+echo "== strata =="
+bash /opt/locus/install-strata.sh
+
 echo "== tools =="
 python3 -m venv /opt/venv
 /opt/venv/bin/pip install --no-cache-dir -q "huggingface_hub==${HF_HUB_VERSION}" "hf_xet==${HF_XET_VERSION}"
@@ -86,4 +90,4 @@ export PATH=/opt/venv/bin:/opt/locus:$PATH
 export HF_XET_HIGH_PERFORMANCE=1 HF_HUB_DISABLE_TELEMETRY=1
 EOF
 mkdir -p /workspace
-echo "setup done: ik $(cat /opt/ik/REF) | mainline $(cat /opt/mainline/REF)"
+echo "setup done: ik $(cat /opt/ik/REF) | mainline $(cat /opt/mainline/REF) | $(strata --version 2>/dev/null || echo 'strata ?')"

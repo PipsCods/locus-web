@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1.7
 #
 # locus demo instance image: ik_llama.cpp + mainline llama.cpp built for the
-# RTX 5090 (sm_120), plus the tools the start script and the benchmark need.
-# Weights are NOT baked in; they are downloaded at boot (see onstart.sh).
+# RTX 5090 (sm_120), the Strata Terminal (prebuilt, from a pinned release),
+# plus the tools the start script and the benchmark need.
+# Weights are NOT baked in; they are downloaded at boot (see onstart.sh), and
+# so is Strata's engine for the card (see install-strata.sh).
 #
 # Build from the repo root:
 #   docker build -t <registry>/locus-instance:<tag> demo/instance
@@ -153,6 +155,15 @@ RUN python3 -m venv /opt/venv \
       "huggingface_hub==${HF_HUB_VERSION}" "hf_xet==${HF_XET_VERSION}" "vastai==${VASTAI_VERSION}" \
  && /opt/venv/bin/hf version \
  && /opt/venv/bin/vastai --version
+
+# Strata Terminal, pinned to one release and checksum-checked; the pins are in
+# install-strata.sh. Empty build args keep the script's defaults.
+ARG STRATA_VERSION=
+ARG STRATA_INSTALL_SHA256=
+ARG STRATA_TERMINAL_BUILD=
+COPY install-strata.sh /opt/locus/
+RUN STRATA_VERSION="${STRATA_VERSION}" STRATA_INSTALL_SHA256="${STRATA_INSTALL_SHA256}" \
+    STRATA_TERMINAL_BUILD="${STRATA_TERMINAL_BUILD}" bash /opt/locus/install-strata.sh
 
 COPY --from=ik /opt/ik /opt/ik
 COPY --from=mainline /opt/mainline /opt/mainline
