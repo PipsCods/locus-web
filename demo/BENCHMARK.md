@@ -196,3 +196,114 @@ content and `reasoning_content` arrive as separate deltas, the thinking switch
 (`enable_thinking`) works both ways, and the final chunk carries `timings`
 (55–58 t/s generation; the 2,204-token sample report was read at 457 t/s).
 The browser page itself was not driven against the real model.
+
+## Strata v0.2.17 on one RTX 3090
+
+Status: **run on 2026-11-21, not yet run as a demo machine.** Raw output is
+not in the repo. `RUNTIME=strata` in `onstart.sh` starts it the way it ran
+here; the default runtime is still `ik`.
+
+This was a different machine from the 5090 run above, so compare it only with
+the ik_llama.cpp / mainline baseline measured on the **same Vast offer** on
+2026-11-18 (its write-up is on the `benchmark-rtx3090` branch).
+
+### Result
+
+On one RTX 3090 with a 16-core EPYC 7302P, Strata reads prompts about
+**12x faster** than mainline and generates about **3x faster** with its
+default drafter. Even with no drafter it generates 2.3x faster.
+
+| UD-IQ4_XS, 15 threads, thinking off | Expert placement | 16k prefill t/s | 16k gen t/s | 32k prefill t/s | 32k gen t/s |
+|---|---|---:|---:|---:|---:|
+| ik_llama.cpp (baseline) | `-ncmoe 35` | 208.7 | 27.8 | 205.6 | 27.4 |
+| mainline llama.cpp (baseline) | `-ncmoe 36` | 240.7 | 31.8 | 229.4 | 31.6 |
+| Strata, no drafter | 7,553-expert VRAM cache, rest in RAM | 2,822 | 74.6 | 2,909 | 79.7 |
+| Strata, MTP drafter | 7,087-expert cache | 2,831 | 100.1 | 2,923 | 114.8 |
+| **Strata default (DFlash2)** | 7,201-expert cache | **2,833** | **108.9** | **2,937** | **112.8** |
+
+- Time to the first token of a 16k-token document: 5.7 s, against roughly 67
+  to 77 s implied by the baseline rates. Strata reads the prompt on the GPU in
+  32k-token chunks and streams the experts over PCIe; llama.cpp computes the
+  offloaded experts on the CPU.
+- The 16 GiB VRAM expert cache served 61 to 84% of the routed experts while
+  generating. The drafters add another 30 to 45%; DFlash2 accepted 50 to 76%
+  of its drafted tokens, MTP 46 to 67%.
+- `UD-Q4_K_XL` with the default drafter: 2,774 t/s prefill and 85.6 t/s
+  generation at 16k (baseline: ik 225.5 / 31.7, mainline 183.5 / 31.8).
+- Sampled rows (temperature 0.7, top_p 0.8, top_k 20, presence penalty 1.5).
+  Greedy was not consistently different. Means of two runs; the spread was
+  large on these short answers (DFlash2 16k greedy: 93.5 and 119.7 t/s).
+
+### Several users at once
+
+`loadgen.py` from the baseline, `UD-IQ4_XS`, 1/2/4/8 users with two requests
+each. Aggregate t/s includes queueing and prefill. Eight users:
+
+| Configuration | Chat t/s | Chat p95 TTFT s | Doc t/s | Doc p95 TTFT s | Shared-doc t/s | Shared-doc p95 TTFT s |
+|---|---:|---:|---:|---:|---:|---:|
+| **Strata, 1 slot, DFlash2 (default)** | 93.6 | 19.1 | 74.0 | 26.1 | 116.0 | 19.0 |
+| Strata, 1 slot, MTP | 89.9 | 23.6 | 74.5 | 30.6 | 103.0 | 25.0 |
+| Strata, 4 slots, MTP | 102.8 | 15.3 | 53.7 | 25.4 | 94.6 | 16.4 |
+| Strata, 8 slots, MTP | 105.4 | 2.1 | 54.2 | 16.2 | 106.8 | 2.0 |
+| *baseline* mainline, 8 slots | 52.5 | 3.0 | 26.6 | 40.9 | 51.6 | 6.7 |
+| *baseline* mainline, 8 slots, `-ub 2048` | 52.8 | 3.0 | 36.8 | 19.95 | 52.8 | 4.3 |
+
+- One request at a time already gives 1.8x the baseline's best eight-user
+  chat throughput and 2 to 2.8x on documents. Waiting grows with the queue:
+  p95 time to first token is 19 to 26 s at eight users.
+- Eight slots bring the chat wait down to 2 s, close to mainline, but make
+  documents slower (about 54 t/s against 74 with one slot): with slots,
+  reading a 2.2k-token document took about 2.2 s instead of 1.2 s.
+- `--batch-mtp` (each slot drafting) did not help on this card.
+- **Slot count: follow-up pending.** A separate run of 2 and 3 slots is under
+  way; the demo keeps Strata's default of one slot until it is in.
+
+### Caveats
+
+- **No `ignore_eos`:** Strata ignores it, so multi-user answers ended
+  naturally at 176 to 246 tokens (means), not the baseline's fixed 256.
+  Shorter answers slightly lower the aggregate t/s and shorten the queue.
+- **Model revision:** Strata downloads Unsloth revision `38bb39e` and checks
+  each file's SHA-256 (UD-IQ4_XS is three shards there, 93.7 GB). The
+  baseline used `f5d175de2cf7` (four shards). Same quant name and total size;
+  tensor-level identity was not checked.
+- **Eight slots crashed once per config:** the first document request after
+  the chat batches ended the engine with `cuBLAS status 14` after "no VRAM
+  for a new window graph" warnings. Strata's server restarted the engine by
+  itself in about 40 s; one request failed and the next waited 46 s. 538 of
+  540 requests succeeded. Strata itself warns that a 24 GB card holds 3
+  requests at once.
+- **memlock:** the container's limit was 8 MiB and could not be raised, even
+  as root (Strata's Docker docs ask for `--ulimit memlock=-1`, which Vast does
+  not offer). Strata still ran; only its 26.8 GiB PLE table stayed unlocked,
+  which Strata says costs up to 6% generation speed.
+- Strata's KV cache is int8 (llama.cpp's default is f16), it ignores
+  `cache_prompt: false` (every timed request started with a unique line, and
+  all showed `cache_n` 0), and the single-user answers were 57 to 121 tokens.
+- Not measured: an RTX 5090, thinking on, `UD-Q4_K_XL` with several users,
+  and host or GPU telemetry.
+
+### Setup
+
+| | |
+|---|---|
+| Date | 2026-11-21, 13:55 to 15:35 UTC |
+| Vast offer / instance | offer 60431240 (the baseline's) / instance 61809268, destroyed, `vastai show instances` empty |
+| Price / cost | $0.656/h / $3.89 of Vast credit |
+| Hardware | RTX 3090 24 GB (PCIe 4.0 x16), AMD EPYC 7302P 16 cores / 32 threads, all 32 threads in the affinity mask, 259 GB container RAM; driver 615.78.08, CUDA 13.4 |
+| Image | `nvidia/cuda:13.0.3-devel-ubuntu24.04` + Strata's `install.sh` (checksum and signature passed) |
+| Strata | release v0.2.17 (commit `12d491da4a69`), Terminal and engine build 0.1.63 (`linux-x86_64-cuda-cuda13`) |
+| Launch | `strata launch --family unsloth --model UD-IQ4_XS --context 40960 --vision off --yes --no-tui` (the benchmark used `--no-api-key`; the demo passes the key) |
+| Strata's choices | all experts in RAM, VRAM expert cache `auto`, KV `int8`, 15 CPU workers, DFlash2 drafter (`--spec 6`), one request at a time |
+| First start | 827 s including the engine and the 93.7 GB download (100 to 260 MB/s); restarts with the files in page cache about 45 s |
+
+### Quality and API
+
+- Spot check (five prompts from `demo/instance/prompts/`, thinking off): both
+  quants summed the segments to EUR 184.6 million correctly and extracted the
+  KPI table; `UD-IQ4_XS` left some derivable changes as n/a, as ik did on the
+  5090. No reasoning text leaked into answers.
+- API, as the Worker uses it: thinking arrives as `reasoning_content`
+  deltas, `enable_thinking: false` turns it off, and the last chunk carries
+  llama.cpp-style `timings`. `/health` answers without the key. Thinking is
+  on by default when the request does not say; the Worker always says.
