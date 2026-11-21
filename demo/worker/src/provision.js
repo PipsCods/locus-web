@@ -12,6 +12,7 @@ import { offerQuery, pickOffer, hardwareOf } from "./offers.js";
 import { envString } from "./clients/vast.js";
 import { issue, randomId } from "./tokens.js";
 import { readyEmail, failedEmail, ownerFailedEmail } from "./emails.js";
+import { RUNTIMES } from "./config.js";
 
 const DEAD = new Set(["exited", "unknown", "offline"]);
 
@@ -56,6 +57,7 @@ export function instanceSpec(cfg, { demoId, apiKey, tunnelToken }) {
 export async function rentStep(deps, demoId, tunnelId) {
   const { vast, cf, cfg, db } = deps;
   if (!cfg.vastImage) throw new Error("VAST_IMAGE is not set");
+  if (!RUNTIMES.includes(cfg.runtime)) throw new Error(`RUNTIME must be one of ${RUNTIMES.join(", ")}, got "${cfg.runtime}"`);
   const demo = await getDemo(db, demoId);
   const now = deps.now();
   if (demo.vast_instance_id) return { instanceId: demo.vast_instance_id, createdAt: Date.parse(demo.updated_at) || now };

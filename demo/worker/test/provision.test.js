@@ -42,6 +42,12 @@ describe("offers", () => {
     expect(spec.env).toBe('-e MODEL_REPO=Qwen/X -e MODEL_FILES=a.gguf -e RUNTIME=ik -e LLAMA_ARGS="-ngl 99 --n-cpu-moe 40" -e LLAMA_API_KEY=k1 -e CF_TUNNEL_TOKEN=tok -e DEMO_TTL_SECONDS=10800');
     expect(() => envString({ X: 'a"b' })).toThrow();
   });
+  it("passes RUNTIME=strata and its launch flags through unchanged", () => {
+    const files = [1, 2, 3].map((n) => `UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-0000${n}-of-00003.gguf`).join(" ");
+    const spec = instanceSpec(config({ MODEL_REPO: "unsloth/Qwen3.8-Flash-Next-GGUF", MODEL_FILES: files, RUNTIME: "strata", LLAMA_ARGS: "--parallel 2", DEMO_DOMAIN: "d" }), { demoId: "ab12", apiKey: "k1", tunnelToken: "tok" });
+    expect(spec.env).toContain(`-e MODEL_FILES="${files}"`);
+    expect(spec.env).toContain('-e RUNTIME=strata -e LLAMA_ARGS="--parallel 2"');
+  });
 });
 
 describe("provisioning workflow (fake step, fake clouds)", () => {
@@ -120,6 +126,26 @@ describe("provisioning workflow (fake step, fake clouds)", () => {
     expect(deps.vast.state.instances.size).toBe(0);
     expect(deps.cf.state.tunnels.size).toBe(0);
     expect(deps.email.sent.map((m) => m.to).sort()).toEqual(["a@acme-industries.com", "owner@locus.test"]);
+  });
+
+  it("rents with each runtime the start script accepts", async () => {
+    for (const runtime of ["ik", "mainline", "strata"]) {
+      await resetDb();
+      const { deps, clock } = makeTestDeps({ vars: { RUNTIME: runtime } });
+      const id = await bootingDemo();
+      expect(await provision(deps, id, fakeStep(clock))).toBe("ended");
+      expect(deps.vast.state.created[0].spec.env).toContain(`-e RUNTIME=${runtime} `);
+    }
+  });
+
+  it("refuses an unknown RUNTIME before renting anything", async () => {
+    const { deps, clock } = makeTestDeps({ vars: { RUNTIME: "vllm" } });
+    const id = await bootingDemo();
+    expect(await provision(deps, id, fakeStep(clock))).toBe("failed");
+    const d = await getDemo(env.DB, id);
+    expect(d.failed_reason).toMatch(/RUNTIME must be one of ik, mainline, strata/);
+    expect(deps.vast.state.created).toHaveLength(0);
+    expect(deps.cf.state.tunnels.size).toBe(0);
   });
 
   it("a dead container (exited) fails the attempt without waiting 45 minutes", async () => {

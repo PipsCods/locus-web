@@ -24,7 +24,7 @@ browser ──/api/demo/*──▶ Pages Function ──service binding DEMO─�
                                                                          │ Vast API: rent, destroy
                                                                          │ Cloudflare API: tunnel + DNS
                                                                          ▼
-                                    locus-demo-<id>.locus-ai.tech ──tunnel──▶ llama-server :8080
+                                    locus-demo-<id>.locus-ai.tech ──tunnel──▶ llama-server or Strata :8080
                                                                               (instance/onstart.sh)
 ```
 

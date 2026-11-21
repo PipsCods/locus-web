@@ -10,6 +10,8 @@ SITE_URL=http://localhost:8787
 OWNER_EMAIL=owner@example.com
 DEMO_DOMAIN=demo.example.com
 VAST_IMAGE=example/locus-demo:dev
+# what the machine runs: ik | mainline | strata (the fake machine ignores it, but an unknown value fails the demo)
+# RUNTIME=strata
 # a short window so the teardown is visible locally
 DEMO_WINDOW_MINUTES=2
 HEALTH_POLL_SECONDS=5

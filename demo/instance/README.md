@@ -5,7 +5,8 @@ search, the benchmark, and the demo start script.
 
 | File | Runs where | What |
 |---|---|---|
-| `Dockerfile` | build machine | CUDA 13.0 image with ik_llama.cpp and mainline llama.cpp (sm_120), cloudflared, `hf`, `vastai` |
+| `Dockerfile` | build machine | CUDA 13.0 image with ik_llama.cpp and mainline llama.cpp (sm_120), the Strata Terminal, cloudflared, `hf`, `vastai` |
+| `install-strata.sh` | build machine / `setup-on-box.sh` | installs the Strata Terminal from the pinned release (v0.2.17), checksum-checked |
 | `find-offer.sh` | your laptop | ranks 1x RTX 5090 offers, `--create` rents the best |
 | `bench.sh` | rented machine | download + load timing, `-ncmoe`/threads sweep, prefill/generation speed, quality spot check |
 | `onstart.sh` | rented machine | demo start: self-destruct timer, tunnel, download, server |
@@ -28,7 +29,8 @@ Build args: `IK_REF`, `MAINLINE_REF` (commit or tag), `CUDA_VERSION`
 (default 13.0.3, the lowest CUDA that 5090 hosts on Vast report),
 `CUDA_ARCHITECTURES` (120), `IK_CPU_VARIANTS` ("v3 zen4"),
 `CLOUDFLARED_VERSION`/`CLOUDFLARED_SHA256`, `HF_HUB_VERSION`, `VASTAI_VERSION`,
-`BUILD_JOBS`. A private registry works; pass `--login '-u USER -p TOKEN ghcr.io'`
+`BUILD_JOBS`, and `STRATA_VERSION`/`STRATA_INSTALL_SHA256`/`STRATA_TERMINAL_BUILD`
+(empty keeps the pin in `install-strata.sh`). A private registry works; pass `--login '-u USER -p TOKEN ghcr.io'`
 to `find-offer.sh`.
 
 ## Run the benchmark end to end
@@ -107,20 +109,54 @@ nohup /opt/locus/onstart.sh >>/var/log/locus-onstart.log 2>&1 &
 | Variable | Required | Meaning |
 |---|---|---|
 | `MODEL_REPO` | yes | e.g. `unsloth/Qwen3.8-Flash-Next-GGUF` |
-| `MODEL_FILES` | yes | space-separated repo paths, e.g. all four `UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-0000N-of-00004.gguf`. The model is the `-00001-of-` shard. Include the last shard: it holds the n-gram table |
-| `RUNTIME` | yes | `ik` or `mainline` |
-| `LLAMA_ARGS` | no | flags from the benchmark, e.g. `-ncmoe 14 -t 32 -c 40960`. Appended last, so they override the defaults. Quotes work; put JSON in single quotes |
+| `MODEL_FILES` | yes | space-separated repo paths, e.g. all four `UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-0000N-of-00004.gguf`. The model is the `-00001-of-` shard. Include the last shard: it holds the n-gram table. For `strata`, list the shards at Strata's pinned revision `38bb39e` (UD-IQ4_XS: the three `...-0000N-of-00003.gguf`); only their folder (the quant) is used, see below |
+| `RUNTIME` | yes | `ik`, `mainline` or `strata` |
+| `LLAMA_ARGS` | no | flags from the benchmark, e.g. `-ncmoe 14 -t 32 -c 40960`; for `strata`, `strata launch` flags, e.g. `--parallel 2`. Appended last, so they override the defaults. Quotes work; put JSON in single quotes |
 | `LLAMA_API_KEY` | yes | bearer key; written to a 0600 file and passed with `--api-key-file` |
 | `CF_TUNNEL_TOKEN` | yes | remotely-managed tunnel token; ingress must point at `http://localhost:8080` |
 | `DEMO_TTL_SECONDS` | yes | hard lifetime from container start; then the instance destroys itself |
 | `CONTAINER_ID`, `CONTAINER_API_KEY` | injected by Vast | used by the self-destruct timer |
-| `HF_TOKEN`, `MODELS_DIR`, `STARTUP_TIMEOUT`, `DESTROY_ON_FAILURE` | no | see the header of `onstart.sh` |
+| `HF_TOKEN`, `MODELS_DIR`, `STARTUP_TIMEOUT`, `STRATA_LAUNCH_TIMEOUT`, `DESTROY_ON_FAILURE` | no | see the header of `onstart.sh` |
+| `LOCUS_DRY_RUN` | no | `1`: check the variables, print the server command one word per line and exit (no timer, tunnel, download or server). For testing on any machine |
 
 Server defaults: `127.0.0.1:8080 -ngl 999 -np 1 --jinja`, plus `--defer-ple`
 for ik (and `GGML_CUDA_NO_PINNED=1` from the wrapper) or
 `--fit off` for mainline: the same base as `bench.sh`, so a
 benchmarked config is reproduced by putting its `-ncmoe`/`-t`/`-c` in
-`LLAMA_ARGS`. `/health` needs no key on either runtime; everything else does.
+`LLAMA_ARGS`. `/health` needs no key on any runtime; everything else does.
+
+`strata` runs the way the 2026-11-21 RTX 3090 benchmark ran it
+([`BENCHMARK.md`](../BENCHMARK.md#strata-v0217-on-one-rtx-3090)):
+
+```sh
+strata launch --family unsloth --model <quant folder of MODEL_FILES> \
+  --context 40960 --vision off --access local --port 8080 \
+  --api-key-env LLAMA_API_KEY --feed <pinned release folder> --yes --no-tui
+```
+
+- `strata launch` does the whole boot: it fetches the engine for the card from
+  the pinned release (`install-strata.sh` writes the release folder to
+  `/opt/locus/strata-feed`), downloads the model itself from Unsloth revision
+  `38bb39e` and checks each file's SHA-256, packs it, fetches the default
+  drafter (DFlash2) and serves. `MODEL_REPO` must be
+  `unsloth/Qwen3.8-Flash-Next-GGUF`; `hf` and `MODELS_DIR` are not used (files
+  go to `~/.local/share/strata`). The log warns if the file Strata serves is
+  not the one `MODEL_FILES` names.
+- Defaults are Strata's: one request at a time (DFlash2 forces it), KV `int8`,
+  experts cached in VRAM and the rest in RAM. The first boot on the benchmark
+  machine took 827 s (engine, 93.7 GB download, pack, load).
+- Nothing listens on 8080 until the model is loaded, so the Worker sees
+  "downloading" (tunnel 502) and then "ready", never "loading" (503).
+- Strata's host process supervises its own server and restarts a crashed
+  engine itself; `onstart.sh` polls `/health` every 15 s and relaunches after
+  four misses in a row.
+- memlock: Strata asks for an unlimited limit (`--ulimit memlock=-1` in its
+  Docker docs), which a Vast container cannot be given. `onstart.sh` raises it
+  as far as it can and logs a warning otherwise. In the benchmark (8 MiB, not
+  raisable even as root) Strata ran; only its 26.8 GiB PLE table stayed
+  unlocked, which Strata says costs up to 6% generation speed.
+- Tiered serving (`<N>_RUNTIME`, `router.py`) is not on `main`, so there is no
+  strata support for it here.
 
 Behaviour: the self-destruct timer starts first and runs in its own session,
 so it fires even if the download hangs or the script dies. The deadline is
@@ -138,4 +174,8 @@ Thinking control for clients: the chat template turns thinking off only with
 `chat_template_kwargs: {"enable_thinking": false}`; effort levels are
 `reasoning_effort` `low`, `medium`, `xhigh` (default). There is no `none`
 level in the template (it raises an error); mainline also maps the OpenAI
-field `reasoning_effort: "none"` to thinking off, ik does not.
+field `reasoning_effort: "none"` to thinking off, ik does not. Strata accepts
+both (`enable_thinking: false` and `reasoning_effort: "none"`), sends thinking
+as `reasoning_content` deltas and llama.cpp-style `timings` in the last chunk,
+and thinks by default when neither is sent (the Worker always sends
+`enable_thinking`). It ignores `cache_prompt: false` and `ignore_eos`.

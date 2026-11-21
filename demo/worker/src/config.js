@@ -8,6 +8,10 @@ const num = (value, fallback) => {
 const str = (value, fallback = "") => (value === undefined || value === null || value === "" ? fallback : String(value));
 const list = (value, fallback = []) => (value ? String(value).split(",").map((s) => s.trim()).filter(Boolean) : fallback);
 
+// The RUNTIME values demo/instance/onstart.sh accepts. A machine with any other value would
+// boot, fail its start script and bill until the boot timeout, so rentStep refuses first.
+export const RUNTIMES = ["ik", "mainline", "strata"];
+
 export function config(env) {
   const windowMinutes = num(env.DEMO_WINDOW_MINUTES, 120);
   const bootTimeoutMinutes = num(env.BOOT_TIMEOUT_MINUTES, 45);
