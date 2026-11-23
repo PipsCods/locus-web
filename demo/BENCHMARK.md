@@ -365,3 +365,125 @@ Speed each user sees while their answer is being written, eight users:
   deltas, `enable_thinking: false` turns it off, and the last chunk carries
   llama.cpp-style `timings`. `/health` answers without the key. Thinking is
   on by default when the request does not say; the Worker always says.
+
+## Round 3: L4, 3090 rerun, several users at once, Apertus (2026-11-22/23)
+
+Status: **run on Vast, not as demo machines.** Raw output is not in the repo.
+Nothing here changes the demo's runtime or flags: one Strata slot with DFlash2
+on a 24 GB card stays the default. Each box is a different host, so compare
+only within a table.
+
+The multi-user tables use two speeds:
+
+- **Generation speed per user:** how fast one answer streams once its first
+  word has appeared (median over requests).
+- **Total output, prompt reading included:** all generated tokens divided by
+  the wall time of the whole run, including waiting and prompt reading.
+
+With one user the total is lower than the per-user speed: the per-user
+clock starts at the first word, the total clock starts when the request is
+sent, so prompt reading only counts against the total.
+
+### Strata IQ3_S on one NVIDIA L4
+
+GSQ-RCO `IQ3_S`, Strata with DFlash2, `--gpu 0` (Strata ignores
+`CUDA_VISIBLE_DEVICES`).
+
+| Host | Power limit | 16k prefill t/s | Gen t/s, one user | 16k time to first token |
+|---|---:|---:|---:|---:|
+| Threadripper 3945WX, 3×L4 box | **40 W** (host cap) | ~610 | ~15 | 26 s |
+| Xeon Platinum 8268 | 72 W (stock) | ~1,400 | 35–38 | 11–12 s |
+| *RTX 3090, EPYC 7443 (above)* | 350 W | 2,311 | 96 | 7 s |
+
+- The first L4 was slow mainly because the host capped it at 40 W; renters
+  can't raise it. At 40 W the SM clock sat near its 210 MHz floor while
+  streaming memory. **Check `nvidia-smi -q -d POWER` before trusting any Vast
+  benchmark.**
+- At 72 W the power cap was still active 90–97% of the time under Strata
+  (SM clock 1.2–1.7 GHz, against 2.04 GHz maximum).
+- Strata v0.2.19's sm_89 speed table made no measurable difference.
+- Per decode window (about 2 rows): GPU wait 22.0 ms (3090: 12.3), CPU
+  experts 23.8 ms (6.2), CPU/GPU sync 9.0 ms (1.9). The GPU part is only
+  1.8x slower; much of the remaining gap is the slower host CPU.
+- **In progress:** the same run on a fast host (Xeon Gold 6448Y, DDR5, AMX)
+  to separate the GPU and host shares.
+
+Several users at once, 72 W L4, `--parallel` = number of users, 40k context:
+
+| Users | Chat: total output, prompt reading included | Chat: generation speed per user | Doc: total output | Doc: generation speed per user | Doc p95 time to first token |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 33 | 37 | 29 | 43 | 2.6 s |
+| 2 | 26 | 17 | 16 | 17 | 21 s |
+| 4 | 28 | 10 | 13 | 6 | 42 s |
+
+One slot that queues requests gave 34–36 t/s total for 1–4 chat users, so
+parallel slots don't pay off on this card.
+
+### Strata IQ3_S on one RTX 3090, rerun and several users at once
+
+**Rerun** on an EPYC 7502 slice (350 W): 10–20% faster than the EPYC 7443
+box above. 16k: 2,800–2,860 t/s prefill, 104–118 t/s generation; 32k:
+2,880–2,920 / 109–116. 15/15 on the quality prompts.
+
+**Truly concurrent users** (`--parallel N` for N users) on an EPYC 7713 with
+the card capped at 280 W:
+
+| Users | Chat: total output, prompt reading included | Chat: generation speed per user | Doc: total output | Doc: generation speed per user |
+|---:|---:|---:|---:|---:|
+| 1 | 93 | 103 | 73 | 114 |
+| 2 | 76 | 43 | 60 | 44 |
+| 4 | 84 | 26 | 56 | 22 |
+| 8 | 91 | 14 | 55 | 8 |
+
+- Total output stays at 75–95 t/s whatever the slot count: parallel slots
+  split the same throughput between users.
+- **Don't serve with `--parallel` 4 or more on a 24 GB card.** Document
+  requests right after chat crashed the engine (`cublasGemmEx` status 14,
+  about 1 MiB VRAM free): 4 of 8 requests failed at 4 slots, 8 of 16 at 8
+  slots. The doc rows above are from a freshly started engine.
+
+### Apertus 1.5 70B NVFP4 on 3×L4
+
+`onprem-ai/Apertus-v1.5-70B-NVFP4` with the swiss-ai vLLM image. The
+weights alone are 46.9 GiB, so it needs three L4s: pipeline parallel 3 (64
+heads rule out TP 3), fp8 KV, `--language-model-only`, layer split
+`23,30,27`, `NCCL_P2P_DISABLE=1`; the KV pool held 48k tokens.
+
+- Generation 3.9 / 3.6 / 3.3 t/s at short / 16k / 32k; prompt reading about
+  225 t/s (16k time to first token 71 s).
+- 8 chat users: 20 t/s total, 2.6 t/s per user.
+- Quality 13/15. Works, but too slow for interactive use on L4s. These L4s
+  were probably on the same 40 W-capped host as above.
+
+### Apertus 1.5 8B FP8 on an RTX 3090 and an RTX PRO 6000
+
+`onprem-ai/Apertus-v1.5-8B-FP8` with vLLM, all of it in VRAM. The 3090
+(sm_86) has no FP8 maths, so vLLM falls back to weight-only FP8 (Marlin);
+the PRO 6000 Blackwell runs native FP8.
+
+| | RTX 3090 (EPYC 7502) | RTX PRO 6000 Blackwell 96 GB (Xeon 6960P, PCIe 5) |
+|---|---:|---:|
+| Gen t/s, one user, short / 16k / 32k | 94 / 74 / 63 | 139 / 120 / 105 |
+| 16k time to first token, uncached | 4.5 s | 0.7 s |
+| KV cache room | – | 602k tokens |
+| Quality prompts | 13/15 on reading (11/15 by the grader) | 14/15 on reading |
+
+Chat, total output with prompt reading included (generation speed per user
+in brackets):
+
+| Users | RTX 3090 | RTX PRO 6000 |
+|---:|---:|---:|
+| 1 | 92 (92) | 134 (136) |
+| 2 | 181 (91) | 267 (136) |
+| 4 | 355 (90) | 531 (137) |
+| 8 | 681 (87) | 1,032 (134) |
+| 16 | – | 1,942 (129) |
+| 32 | – | 3,619 (123) |
+
+- A dense 8B model in VRAM scales almost linearly with users, unlike the
+  hybrid MoE runs above. Documents (2.2k tokens each) on the PRO 6000:
+  848 t/s total at 8 users, 2,091 at 32 (80 t/s per user, p95 time to first
+  token 1.0 s).
+- One 3090 answer leaked a `<|inner_suffix|>` token, likely a chat template
+  or reasoning-parser issue.
+- The PRO 6000's power limit was its stock 600 W.
