@@ -255,8 +255,66 @@ each. Aggregate t/s includes queueing and prefill. Eight users:
   documents slower (about 54 t/s against 74 with one slot): with slots,
   reading a 2.2k-token document took about 2.2 s instead of 1.2 s.
 - `--batch-mtp` (each slot drafting) did not help on this card.
-- **Slot count: follow-up pending.** A separate run of 2 and 3 slots is under
-  way; the demo keeps Strata's default of one slot until it is in.
+- **Slot count:** a follow-up on a second machine (below) measured 1, 2 and
+  3 slots. One slot with DFlash2 stays the default.
+
+### Slot count and the GSQ-RCO IQ3_S quant (second machine)
+
+Run on 2026-11-21 on a different Vast machine: RTX 3090 with an EPYC 7443
+(15 CPU workers), so compare only within this section. Same `loadgen.py`,
+DFlash2 drafter, 40k context, thinking off, `UD-IQ4_XS` re-measured on the
+same box alongside the new quant.
+
+The new quant is `IQ3_S` from
+[`ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF).
+It assigns a quant type per tensor (target 3.5 bpw over the file) and is
+83.6 GB in two shards, against 93.7 GB for `UD-IQ4_XS`. Strata runs it
+unmodified: `strata launch --model-path <dir> --model iq3_s --context 40960
+--vision off --parallel 1 --drafting dflash2`.
+
+| | UD-IQ4_XS | GSQ-RCO IQ3_S |
+|---|---:|---:|
+| VRAM expert cache, 1 slot | 7,188 experts (16.2 GiB) | **8,771 experts (16.6 GiB)** |
+| VRAM expert cache, 3 slots | 6,185 experts (13.9 GiB) | 7,572 experts (14.4 GiB) |
+| One user, 16k prefill t/s | 2,284 | 2,311 |
+| One user, 16k gen t/s | 86.7 | **95.9** |
+
+Eight users, aggregate t/s (p95 time to first token in brackets):
+
+| Configuration | Chat | Doc | Shared-doc |
+|---|---:|---:|---:|
+| UD-IQ4_XS, 1 slot | 82.6 (23.7 s) | 64.5 (33.8 s) | 98.6 (23.2 s) |
+| UD-IQ4_XS, 2 slots | 77.2 (26.4 s) | 42.4 (53.0 s) | 63.6 (31.5 s) |
+| UD-IQ4_XS, 3 slots | 89.4 (18.8 s) | 45.3 (48.9 s) | 82.7 (21.0 s) |
+| **IQ3_S, 1 slot** | 92.3 (19.8 s) | **74.4 (26.8 s)** | **110.7 (22.4 s)** |
+| IQ3_S, 3 slots | **103.5 (12.5 s)** | 54.9 (29.6 s) | not run |
+
+The 2-slot row and the 3-slot shared-doc cell come from the earlier slot run
+on the same box, a few hours before; the rest were measured back to back.
+
+Speed each user sees while their answer is being written, eight users:
+
+| Configuration | Chat t/s per user | Doc t/s per user |
+|---|---:|---:|
+| UD-IQ4_XS, 1 slot | 89 | 104 |
+| UD-IQ4_XS, 3 slots | 34 | 24 |
+| IQ3_S, 1 slot | 99 | 124 |
+| IQ3_S, 3 slots | 38 | 28 |
+
+- With one slot, requests take turns: each answer streams at full speed, but
+  the others wait (mean time to first token 8 s for chat, 13 s for documents
+  at eight users with IQ3_S). With three slots, three answers stream at once
+  at about a third of the speed each.
+- 2 slots was worse than both 1 and 3. 3 slots wins only on chat; documents
+  lose 25 to 30%. One slot with DFlash2 stays the default.
+- IQ3_S is 10 to 21% faster than UD-IQ4_XS everywhere except prefill: the
+  smaller experts fit 22% more of them in the VRAM cache.
+- Quality: 15 short reasoning, coding and factual prompts with thinking on;
+  both quants answered 15/15 with no loops or garbled output. This is a
+  sanity check, not an eval; it cannot show small quality differences.
+- 840 requests over the whole run (all configurations), none failed. Peak
+  VRAM 23.6 GiB of 24.
+- Instance 61823687 at $0.648/h, destroyed, `vastai show instances` empty.
 
 ### Caveats
 
