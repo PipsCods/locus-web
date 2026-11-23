@@ -112,4 +112,10 @@ describe("runSweep against fakes + D1", () => {
     expect(admitted).toEqual([q]);
     expect(created.provision.map((x) => x.params.demoId)).toEqual([q]);
   });
+
+  it("does nothing without a Vast key (manual mode)", async () => {
+    const { deps } = makeTestDeps({ vars: { VAST_API_KEY: "" } });
+    deps.vast.listInstances = async () => { throw new Error("must not be called"); };
+    expect(await runSweep(deps)).toEqual({ skipped: "VAST_API_KEY not set" });
+  });
 });

@@ -14,7 +14,8 @@ IK_REPO=${IK_REPO:-https://github.com/ikawrakow/ik_llama.cpp}
 IK_REF=${IK_REF:-a6383da414f74c944999e7b9312a5a5d76191f6b}
 MAINLINE_REPO=${MAINLINE_REPO:-https://github.com/ggml-org/llama.cpp}
 MAINLINE_REF=${MAINLINE_REF:-ad5cbfa911b975b2bf987d3bf7d8f2b3f36671ab}
-CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES:-120}
+# default: this machine's GPU (8.6 -> 86 for an RTX 3090, 12.0 -> 120 for an RTX 5090)
+CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -n1 | tr -d ' .')}
 HF_HUB_VERSION=${HF_HUB_VERSION:-2.4.0}
 HF_XET_VERSION=${HF_XET_VERSION:-1.8.0}
 JOBS=${BUILD_JOBS:-$(nproc)}

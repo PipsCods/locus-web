@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# locus benchmark: Qwen3.8-Flash-Next in hybrid CPU/GPU mode on one RTX 5090.
+# locus benchmark: Qwen3.8-Flash-Next in hybrid CPU/GPU mode on one GPU (RTX 5090, RTX 3090, ...).
 # Runs ON the rented machine (inside the locus instance image), over ssh.
 #
 # For each quant: download (timed), then for each runtime:
@@ -21,7 +21,7 @@
 #   --repeats N             requests per (context, mode), default 2
 #   --ncmoe "N ..."         skip the search and use these -ncmoe values
 #   --threads "T ..."       default: physical cores of the slice, and half
-#   --vram-target MiB       VRAM to fill, default 29500 (of 32607 on a 5090)
+#   --vram-target MiB       VRAM to fill, default GPU memory minus 3100 MiB (29500 on a 5090)
 #   --models-dir DIR        default /workspace/models
 #   --out DIR               default /workspace/bench/<UTC timestamp>
 #   --prompts FILE          quality prompts (JSONL: {"id","prompt"}), default prompts/spot-check.jsonl
@@ -50,7 +50,7 @@ MODES="off low"
 REPEATS=2
 NCMOE_LIST=""
 THREADS_LIST=""
-VRAM_TARGET=29500
+VRAM_TARGET=""
 MODELS_DIR=/workspace/models
 OUT=""
 PROMPTS_FILE=$SCRIPT_DIR/prompts/spot-check.jsonl
@@ -320,6 +320,11 @@ record_hardware() {
 }
 
 record_hardware
+if [[ -z "$VRAM_TARGET" ]]; then
+  # leave ~3 GB for compute buffers and the 32k KV cache, as measured on the 5090
+  VRAM_TARGET=$(( $(jq -r '.gpu_mem_mib' "$OUT/hardware.json") - 3100 ))
+  log "VRAM target ${VRAM_TARGET} MiB"
+fi
 if [[ "$HW_ONLY" -eq 1 ]]; then
   cat "$OUT/hardware.json"
   exit 0
