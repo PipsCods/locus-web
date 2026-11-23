@@ -393,6 +393,7 @@ GSQ-RCO `IQ3_S`, Strata with DFlash2, `--gpu 0` (Strata ignores
 |---|---:|---:|---:|---:|
 | Threadripper 3945WX, 3×L4 box | **40 W** (host cap) | ~610 | ~15 | 26 s |
 | Xeon Platinum 8268 | 72 W (stock) | ~1,400 | 35–38 | 11–12 s |
+| Xeon Gold 6448Y (DDR5) | 72 W (stock) | ~1,850 | 47–58 | ~9 s |
 | *RTX 3090, EPYC 7443 (above)* | 350 W | 2,311 | 96 | 7 s |
 
 - The first L4 was slow mainly because the host capped it at 40 W; renters
@@ -405,8 +406,11 @@ GSQ-RCO `IQ3_S`, Strata with DFlash2, `--gpu 0` (Strata ignores
 - Per decode window (about 2 rows): GPU wait 22.0 ms (3090: 12.3), CPU
   experts 23.8 ms (6.2), CPU/GPU sync 9.0 ms (1.9). The GPU part is only
   1.8x slower; much of the remaining gap is the slower host CPU.
-- **In progress:** the same run on a fast host (Xeon Gold 6448Y, DDR5, AMX)
-  to separate the GPU and host shares.
+- **On a fast host (Xeon Gold 6448Y, DDR5), the same L4 decodes about 1.5–2×
+  faster.** CPU expert time per window fell 5× (69.6 to 14.0 ms at about 4.4
+  rows) and CPU/GPU sync from 9.0 to 0.9 ms. The card is now power-capped
+  100% of the time. So the host CPU explained most of the gap; the remaining
+  ~2× to the 3090 is the power-capped card. Quality 15/15.
 
 Several users at once, 72 W L4, `--parallel` = number of users, 40k context:
 
@@ -418,6 +422,17 @@ Several users at once, 72 W L4, `--parallel` = number of users, 40k context:
 
 One slot that queues requests gave 34–36 t/s total for 1–4 chat users, so
 parallel slots don't pay off on this card.
+
+The same on the fast host (Xeon Gold 6448Y); 1 user is one slot:
+
+| Users | Chat: total output, prompt reading included | Chat: generation speed per user | Doc: total output | Doc: generation speed per user |
+|---:|---:|---:|---:|---:|
+| 1 | 49 | 55 | 51 | 69 |
+| 2 | 57 | 35 | 45 | 38 |
+| 4 | 62 | 22 | 45 | 17 |
+
+One queued slot gave 53 t/s total for 2 and 4 chat users, at a p95 time to
+first token of 5 s and 17 s.
 
 ### Strata IQ3_S on one RTX 3090, rerun and several users at once
 
