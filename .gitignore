@@ -22,6 +22,8 @@ mockups/previews/
 # working files of AI coding tools: session state, recordings and personal settings
 .omc/
 .claude/settings.local.json
+.claude/worktrees/
+.claude/bench-results/
 graphify-out/
 
 # editors and machine clutter
